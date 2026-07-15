@@ -1,0 +1,1 @@
+export function EnterpriseTopbar(){return <div className='rounded-[28px] border border-white/10 bg-[#07111f]/80 p-6 text-white text-2xl font-black'>VYRON REACH Enterprise Topbar</div>}

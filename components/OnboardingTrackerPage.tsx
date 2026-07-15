@@ -1,0 +1,17 @@
+'use client'
+
+export function OnboardingTrackerPage() {
+  return (
+    <div className="space-y-6">
+      <section className="rounded-3xl border border-purple-500/20 bg-[#0b0b1d] p-8">
+        <p className="text-xs font-black uppercase tracking-[0.35em] text-purple-300">
+          CLIENT ONBOARDING
+        </p>
+
+        <h1 className="mt-3 text-4xl font-black text-white">
+          Go-Live Tracker
+        </h1>
+      </section>
+    </div>
+  )
+}

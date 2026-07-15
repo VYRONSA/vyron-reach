@@ -1,26 +1,167 @@
+@import "../components/reach/vyron-reach-premium.css";
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --vyron-sidebar: #080b24;
+  --vyron-sidebar-2: #071a3a;
+  --vyron-ink: #071126;
+  --vyron-text: #0b1024;
+  --vyron-muted: #667085;
+  --vyron-purple: #7c3aed;
+  --vyron-pink: #ec4899;
+  --vyron-blue: #1688ff;
+  --vyron-cyan: #22d3ee;
+  --vyron-emerald: #10b981;
+  --vyron-orange: #f97316;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  min-height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  color: var(--vyron-text);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  background:
+    radial-gradient(circle at 80% 0%, rgba(236, 72, 153, 0.20), transparent 34%),
+    radial-gradient(circle at 62% 18%, rgba(124, 58, 237, 0.18), transparent 34%),
+    radial-gradient(circle at 80% 38%, rgba(34, 211, 238, 0.18), transparent 34%),
+    linear-gradient(135deg, #f8fbff 0%, #eef7ff 38%, #fff5fb 100%);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.vyron-app {
+  min-height: 100vh;
+}
+
+.vyron-sidebar {
+  width: 292px;
+  background:
+    radial-gradient(circle at 18% 8%, rgba(236, 72, 153, 0.34), transparent 28%),
+    radial-gradient(circle at 96% 35%, rgba(0, 163, 255, 0.26), transparent 34%),
+    linear-gradient(180deg, #0b0d2f 0%, #061a3b 54%, #08051f 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 18px 0 55px rgba(15, 23, 42, 0.18);
+}
+
+.vyron-sidebar-section {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.30em;
+  color: rgba(226, 232, 240, 0.58);
+  text-transform: uppercase;
+}
+
+.vyron-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  min-height: 46px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  color: rgba(226, 232, 240, 0.92);
+  font-size: 16px;
+  font-weight: 800;
+  transition: all 180ms ease;
+}
+
+.vyron-sidebar-link:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.vyron-sidebar-link-active {
+  color: white;
+  background: linear-gradient(100deg, #b31cff 0%, #7246ff 48%, #078cff 100%);
+  box-shadow:
+    0 16px 36px rgba(88, 80, 255, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+.vyron-shell-main {
+  position: relative;
+  isolation: isolate;
+  overflow-x: hidden;
+  min-height: 100vh;
+  flex: 1;
+  background:
+    radial-gradient(circle at 82% 2%, rgba(236, 72, 153, 0.22), transparent 32%),
+    radial-gradient(circle at 72% 30%, rgba(34, 211, 238, 0.20), transparent 35%),
+    radial-gradient(circle at 25% 8%, rgba(124, 58, 237, 0.12), transparent 34%),
+    linear-gradient(135deg, #f8fbff 0%, #f3f9ff 40%, #fff6fb 100%);
+}
+
+.vyron-content-max {
+  position: relative;
+  isolation: isolate;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 26px 32px 42px;
+}
+
+.vyron-card {
+  background: rgba(255,255,255,0.82);
+  border: 1px solid rgba(209,213,219,0.78);
+  border-radius: 18px;
+  box-shadow: 0 18px 50px rgba(15,23,42,0.07);
+  backdrop-filter: blur(18px);
+}
+
+.vyron-gradient-hero {
+  background:
+    radial-gradient(circle at 72% 42%, rgba(34, 211, 238, 0.30), transparent 32%),
+    radial-gradient(circle at 78% 20%, rgba(236, 72, 153, 0.22), transparent 34%),
+    radial-gradient(circle at 58% 15%, rgba(124, 58, 237, 0.20), transparent 30%),
+    linear-gradient(135deg, rgba(255,255,255,0.78) 0%, rgba(237,247,255,0.86) 50%, rgba(255,230,250,0.74) 100%);
+}
+
+.vyron-mini-icon {
+  height: 36px;
+  width: 36px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  color: white;
+}
+
+.vyron-tab-active {
+  background: linear-gradient(100deg, #922fff 0%, #326dff 100%);
+  color: white;
+  box-shadow: 0 16px 34px rgba(72, 89, 255, 0.22);
+}
+
+.vyron-chart-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(124, 58, 237, 0.35);
+  border-radius: 999px;
 }

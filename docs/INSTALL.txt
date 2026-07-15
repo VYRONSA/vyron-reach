@@ -1,0 +1,41 @@
+# VYRON REACH — FULL app/page.tsx UPDATE
+
+## FILE PATH
+
+C:\Users\humres\vyron-reach\app\page.tsx
+
+## WHAT THIS ADDS
+
+- ROI Intelligence page
+- Campaign Intelligence page
+- Full AI marketing workflow rendering
+
+## IMPORTANT
+
+This full file already includes:
+
+- ROIIntelligencePage
+- CampaignPlanningPage
+- MarketingReportPage
+- AdGenerationPage
+- GeoIntelligencePage
+- AIStrategyEnginePage
+- MarketingClientIntakePage
+- AIMarketingCommandCentrePage
+
+## STEPS
+
+1. Delete EVERYTHING inside:
+   app/page.tsx
+
+2. Paste the FULL replacement file from this package.
+
+3. Save.
+
+4. Run:
+
+taskkill /IM node.exe /F
+
+Remove-Item .next -Recurse -Force
+
+npm run dev

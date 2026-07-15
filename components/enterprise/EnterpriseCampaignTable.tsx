@@ -1,0 +1,1 @@
+export function EnterpriseCampaignTable(){return <div className='rounded-[30px] border border-white/10 bg-[#07111f]/80 p-6 text-white text-xl font-bold'>Enterprise Campaign Performance Table</div>}

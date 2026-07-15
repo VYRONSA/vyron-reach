@@ -1,0 +1,234 @@
+'use client'
+
+import {
+  analyzeROI,
+  type LeadEntry,
+} from '@/lib/roiIntelligence'
+
+const demoLeads: LeadEntry[] = [
+  {
+    source: 'Google Search',
+    cost: 300,
+    revenue: 7000,
+    converted: true,
+    quality: 'Excellent',
+    location: 'Somerset West',
+  },
+  {
+    source: 'Facebook',
+    cost: 600,
+    revenue: 1500,
+    converted: false,
+    quality: 'Average',
+    location: 'Strand',
+  },
+  {
+    source: 'Instagram',
+    cost: 450,
+    revenue: 1200,
+    converted: false,
+    quality: 'Poor',
+    location: 'Gordons Bay',
+  },
+  {
+    source: 'LinkedIn',
+    cost: 900,
+    revenue: 12000,
+    converted: true,
+    quality: 'Excellent',
+    location: 'Cape Town',
+  },
+]
+
+export function ROIIntelligencePage() {
+  const result = analyzeROI(demoLeads)
+
+  return (
+    <div className="space-y-6">
+      <section className="rounded-3xl border border-purple-500/20 bg-[#0b0b1d] p-8">
+        <p className="text-xs font-black uppercase tracking-[0.35em] text-purple-300">
+          ROI INTELLIGENCE
+        </p>
+
+        <h1 className="mt-3 text-5xl font-black text-white">
+          Marketing Profitability Intelligence
+        </h1>
+
+        <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-400">
+          Analyze campaign profitability, wasted spend,
+          lead quality and platform performance.
+        </p>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-4">
+        <Metric
+          label="Total Spend"
+          value={`R${result.totalSpend.toLocaleString('en-ZA')}`}
+        />
+
+        <Metric
+          label="Revenue"
+          value={`R${result.totalRevenue.toLocaleString('en-ZA')}`}
+        />
+
+        <Metric
+          label="ROI"
+          value={`${result.roi.toFixed(1)}%`}
+        />
+
+        <Metric
+          label="Wasted Spend"
+          value={`R${result.wastedSpend.toLocaleString('en-ZA')}`}
+        />
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-2">
+        <section className="rounded-3xl border border-purple-500/20 bg-[#0b0b1d] p-6">
+          <h2 className="text-2xl font-black text-white">
+            Platform Intelligence
+          </h2>
+
+          <div className="mt-5 space-y-4">
+            <Insight
+              label="Best Lead Quality"
+              value={result.bestPlatform}
+            />
+
+            <Insight
+              label="Highest ROI"
+              value={result.highestROIPlatform}
+            />
+
+            <Insight
+              label="Weakest Platform"
+              value={result.worstPlatform}
+            />
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-red-500/20 bg-red-500/10 p-6">
+          <h2 className="text-2xl font-black text-white">
+            Warnings
+          </h2>
+
+          <div className="mt-5 space-y-3">
+            {result.warnings.length === 0 ? (
+              <div className="rounded-2xl border border-emerald-400/20 bg-black/20 p-4 text-sm font-bold text-emerald-100">
+                No major profitability warnings.
+              </div>
+            ) : (
+              result.warnings.map(warning => (
+                <div
+                  key={warning}
+                  className="rounded-2xl border border-red-500/20 bg-black/20 p-4 text-sm font-bold text-red-100"
+                >
+                  {warning}
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      </section>
+
+      <section className="rounded-3xl border border-purple-500/20 bg-[#0b0b1d] p-6">
+        <h2 className="text-2xl font-black text-white">
+          Lead Intelligence Feed
+        </h2>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {demoLeads.map((lead, index) => (
+            <div
+              key={`${lead.source}-${index}`}
+              className="rounded-2xl border border-purple-500/15 bg-white/[0.03] p-4"
+            >
+              <div className="text-lg font-black text-white">
+                {lead.source}
+              </div>
+
+              <div className="mt-2 text-sm text-slate-400">
+                {lead.location}
+              </div>
+
+              <div className="mt-4 space-y-2">
+                <LeadMetric
+                  label="Cost"
+                  value={`R${lead.cost}`}
+                />
+
+                <LeadMetric
+                  label="Revenue"
+                  value={`R${lead.revenue}`}
+                />
+
+                <LeadMetric
+                  label="Quality"
+                  value={lead.quality}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function Metric({
+  label,
+  value,
+}: {
+  label: string
+  value: string
+}) {
+  return (
+    <div className="rounded-3xl border border-purple-500/20 bg-[#0b0b1d] p-6">
+      <div className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">
+        {label}
+      </div>
+
+      <div className="mt-4 text-3xl font-black text-white">
+        {value}
+      </div>
+    </div>
+  )
+}
+
+function Insight({
+  label,
+  value,
+}: {
+  label: string
+  value: string
+}) {
+  return (
+    <div className="rounded-2xl border border-purple-500/15 bg-white/[0.03] p-4">
+      <div className="text-xs font-black uppercase tracking-[0.2em] text-purple-200">
+        {label}
+      </div>
+
+      <div className="mt-2 text-lg font-black text-white">
+        {value}
+      </div>
+    </div>
+  )
+}
+
+function LeadMetric({
+  label,
+  value,
+}: {
+  label: string
+  value: string
+}) {
+  return (
+    <div className="rounded-xl border border-purple-500/10 bg-[#05050f] p-2">
+      <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+        {label}
+      </div>
+
+      <div className="mt-1 text-sm font-black text-white">
+        {value}
+      </div>
+    </div>
+  )
+}

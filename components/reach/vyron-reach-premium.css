@@ -1,0 +1,362 @@
+/* VYRON REACH — PREMIUM VISUAL UPGRADE */
+
+:root {
+  --reach-navy: #050818;
+  --reach-purple: #8b2cff;
+  --reach-blue: #1687ff;
+  --reach-cyan: #17d7ff;
+  --reach-green: #00d084;
+  --reach-shadow: 0 32px 120px rgba(15, 23, 42, 0.18);
+}
+
+.vyron-reach-page {
+  position: relative;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(139, 44, 255, 0.18), transparent 32%),
+    radial-gradient(circle at 80% 5%, rgba(23, 215, 255, 0.16), transparent 28%),
+    linear-gradient(135deg, #f7fbff 0%, #fff7ff 52%, #effaff 100%);
+}
+
+.vyron-reach-cinematic-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 36px;
+  min-height: 390px;
+  padding: 42px;
+  background:
+    linear-gradient(105deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.90) 44%, rgba(255,255,255,0.58) 56%, rgba(9, 18, 43, 0.94) 100%);
+  box-shadow: var(--reach-shadow);
+  border: 1px solid rgba(255,255,255,0.86);
+}
+
+.vyron-reach-cinematic-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -3;
+  background:
+    radial-gradient(circle at 77% 45%, rgba(23,215,255,0.42), transparent 28%),
+    radial-gradient(circle at 66% 34%, rgba(139,44,255,0.38), transparent 31%),
+    radial-gradient(circle at 90% 10%, rgba(255,43,214,0.23), transparent 26%);
+}
+
+.vyron-reach-eyebrow {
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: var(--reach-purple);
+}
+
+.vyron-reach-title {
+  margin-top: 18px;
+  max-width: 720px;
+  font-size: clamp(44px, 5vw, 82px);
+  line-height: 0.92;
+  letter-spacing: -0.075em;
+  font-weight: 950;
+  color: #050818;
+}
+
+.vyron-reach-subtitle {
+  margin-top: 20px;
+  max-width: 640px;
+  font-size: 18px;
+  line-height: 1.55;
+  color: #42526a;
+  font-weight: 750;
+}
+
+.vyron-reach-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 28px;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: #008f64;
+}
+
+.vyron-reach-status span {
+  width: 12px;
+  height: 12px;
+  border-radius: 99px;
+  background: var(--reach-green);
+  box-shadow: 0 0 26px rgba(0,208,132,0.8);
+}
+
+.vyron-reach-device-stage {
+  position: absolute;
+  right: 42px;
+  top: 42px;
+  bottom: 42px;
+  width: min(42%, 560px);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.vyron-reach-laptop {
+  position: absolute;
+  right: 4%;
+  top: 16%;
+  width: 82%;
+  min-height: 230px;
+  border-radius: 28px;
+  background: linear-gradient(145deg, #050818, #0c1633);
+  box-shadow: 0 40px 120px rgba(6, 16, 40, 0.55), 0 0 0 2px rgba(255,255,255,0.18) inset;
+  transform: rotate(-3deg);
+  padding: 18px;
+}
+
+.vyron-reach-laptop::before {
+  content: "VYRON REACH";
+  display: block;
+  color: white;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0.2em;
+  margin-bottom: 14px;
+}
+
+.vyron-reach-laptop-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.vyron-reach-ui-card {
+  min-height: 62px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  padding: 10px;
+}
+
+.vyron-reach-ui-card strong {
+  display: block;
+  color: white;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.vyron-reach-ui-card small {
+  display: block;
+  color: rgba(255,255,255,0.56);
+  font-weight: 800;
+  margin-top: 6px;
+}
+
+.vyron-reach-phone {
+  position: absolute;
+  left: 2%;
+  bottom: 0;
+  width: 138px;
+  min-height: 255px;
+  border-radius: 30px;
+  background: linear-gradient(180deg, #101a38, #040713);
+  border: 5px solid rgba(255,255,255,0.22);
+  box-shadow: 0 40px 90px rgba(0,0,0,0.38);
+  transform: rotate(-8deg);
+  padding: 16px 12px;
+}
+
+.vyron-reach-phone::before {
+  content: "LIVE CAMPAIGN";
+  display: block;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  margin-bottom: 14px;
+}
+
+.vyron-reach-phone-line {
+  height: 10px;
+  border-radius: 99px;
+  background: rgba(255,255,255,0.16);
+  margin: 10px 0;
+}
+
+.vyron-reach-phone-button {
+  margin-top: 20px;
+  height: 38px;
+  border-radius: 14px;
+  background: linear-gradient(90deg, var(--reach-purple), var(--reach-cyan));
+}
+
+.vyron-reach-feature-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 18px;
+  margin-top: 24px;
+}
+
+.vyron-reach-feature-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 26px;
+  background: rgba(255,255,255,0.86);
+  border: 1px solid rgba(255,255,255,0.92);
+  box-shadow: 0 20px 60px rgba(15,23,42,0.08);
+  padding: 22px;
+}
+
+.vyron-reach-feature-card b {
+  display: block;
+  font-size: 26px;
+  letter-spacing: -0.05em;
+  color: #07122b;
+}
+
+.vyron-reach-feature-card span {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #607087;
+  font-weight: 750;
+}
+
+.vyron-reach-platform-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 22px;
+}
+
+.vyron-reach-platform-card {
+  position: relative;
+  min-height: 230px;
+  overflow: hidden;
+  border-radius: 32px;
+  padding: 26px;
+  color: white;
+  box-shadow: 0 28px 100px rgba(15,23,42,0.22);
+  transition: transform .25s ease, box-shadow .25s ease;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vyron-reach-platform-card:hover {
+  transform: translateY(-8px) scale(1.015);
+  box-shadow: 0 42px 130px rgba(15,23,42,0.30);
+}
+
+.platform-icon {
+  display: flex;
+  width: 58px;
+  height: 58px;
+  border-radius: 20px;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.2);
+  font-size: 28px;
+  font-weight: 950;
+}
+
+.vyron-reach-platform-card h3 {
+  margin-top: 22px;
+  font-size: 26px;
+  font-weight: 950;
+  letter-spacing: -0.045em;
+}
+
+.vyron-reach-platform-card p {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: rgba(255,255,255,0.82);
+  font-weight: 700;
+}
+
+.platform-facebook { background: linear-gradient(135deg, #1877f2, #0b4dc1); }
+.platform-instagram { background: linear-gradient(135deg, #feda75, #d62976 46%, #4f5bd5); }
+.platform-google { background: linear-gradient(135deg, #4285f4, #34a853 55%, #fbbc05); }
+.platform-linkedin { background: linear-gradient(135deg, #0a66c2, #053764); }
+.platform-whatsapp { background: linear-gradient(135deg, #25d366, #075e54); }
+.platform-seo { background: linear-gradient(135deg, #07122b, #17d7ff); }
+
+.vyron-reach-creative-gallery {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 22px;
+}
+
+.vyron-reach-ad-preview {
+  overflow: hidden;
+  border-radius: 32px;
+  background: #fff;
+  box-shadow: 0 28px 90px rgba(15,23,42,0.14);
+  border: 1px solid rgba(255,255,255,0.92);
+}
+
+.vyron-reach-ad-art {
+  min-height: 360px;
+  padding: 28px;
+  color: white;
+  background:
+    radial-gradient(circle at 70% 30%, rgba(23,215,255,.48), transparent 26%),
+    radial-gradient(circle at 35% 15%, rgba(139,44,255,.48), transparent 32%),
+    linear-gradient(135deg, #050818, #0c1b42 58%, #031f2b);
+}
+
+.vyron-reach-ad-art h2 {
+  margin-top: 70px;
+  font-size: 42px;
+  line-height: .93;
+  letter-spacing: -.06em;
+  font-weight: 950;
+}
+
+.vyron-reach-ad-art p {
+  margin-top: 14px;
+  color: rgba(255,255,255,.78);
+  font-weight: 750;
+  line-height: 1.4;
+}
+
+.vyron-reach-ad-actions {
+  display: flex;
+  gap: 10px;
+  padding: 18px;
+}
+
+.vyron-reach-button-primary {
+  border: none;
+  border-radius: 16px;
+  padding: 13px 18px;
+  background: linear-gradient(90deg, var(--reach-purple), var(--reach-blue));
+  color: white;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.vyron-reach-button-ghost {
+  border: 1px solid #dbe4ef;
+  border-radius: 16px;
+  padding: 13px 18px;
+  background: white;
+  color: #07122b;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+@media (max-width: 1100px) {
+  .vyron-reach-device-stage { display: none; }
+  .vyron-reach-cinematic-hero { min-height: auto; }
+  .vyron-reach-feature-row,
+  .vyron-reach-platform-grid,
+  .vyron-reach-creative-gallery { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+
+@media (max-width: 720px) {
+  .vyron-reach-feature-row,
+  .vyron-reach-platform-grid,
+  .vyron-reach-creative-gallery { grid-template-columns: 1fr; }
+  .vyron-reach-cinematic-hero { padding: 28px; }
+}
