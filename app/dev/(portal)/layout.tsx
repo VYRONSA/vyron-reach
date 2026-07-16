@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import '../portal-theme.css'
+import { isOwner } from '@/lib/dev/auth'
 import { DevPreferencesProvider } from '@/context/dev/DevPreferencesContext'
 import { DevExperienceProvider } from '@/components/dev/DevExperience'
 import { DevPortalShell } from '@/components/dev/DevPortalShell'
@@ -9,10 +10,12 @@ export const metadata = {
 }
 
 export default function DevPortalLayout({ children }: { children: ReactNode }) {
+  const owner = isOwner()
+
   return (
     <DevPreferencesProvider>
       <DevExperienceProvider>
-        <DevPortalShell>{children}</DevPortalShell>
+        <DevPortalShell owner={owner}>{children}</DevPortalShell>
       </DevExperienceProvider>
     </DevPreferencesProvider>
   )

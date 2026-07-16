@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { PROJECTS, getProjectName } from '@/lib/dev/projectsData'
+import { getProjects, getProjectName } from '@/lib/dev/projectsData'
 import { ACTIVITY_CATEGORIES, getActivityEvents, type ActivityCategory, type ActivityEvent } from '@/lib/dev/activityFeed'
 import { DevBadge, DevEmptyState, DevInput, DevSelect } from './ui'
 
@@ -67,7 +67,7 @@ export function ActivityTimeline() {
       <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--dev-border)] bg-[var(--dev-surface)] p-3">
         <DevSelect value={project} onChange={e => setProject(e.target.value)} aria-label="Filter by project" className="sm:w-44">
           <option value="">All projects</option>
-          {PROJECTS.map(p => (
+          {getProjects().map(p => (
             <option key={p.slug} value={p.slug}>
               {p.name}
             </option>

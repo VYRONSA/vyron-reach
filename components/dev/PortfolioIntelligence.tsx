@@ -1,14 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { PROJECTS } from '@/lib/dev/projectsData'
-import { getMilestones, getMilestoneProgress } from '@/lib/dev/milestonesStorage'
+import { getProjects } from '@/lib/dev/projectsData'
+import { getMilestones } from '@/lib/dev/milestonesStorage'
 import { getBatches } from '@/lib/dev/batchesStorage'
 import { getRisks, openHighRisks, isOpenRisk } from '@/lib/dev/risksStorage'
 import { outstandingDebt } from '@/lib/dev/technicalDebtStorage'
 import { getReleases } from '@/lib/dev/releasesStorage'
 import { getTasks } from '@/lib/dev/queueStorage'
 import { recentlyCompleted, type ActivityEvent } from '@/lib/dev/activityFeed'
+import { getProjectIntelligence } from '@/lib/dev/projectIntelligence'
 import { DevCard, DevGrid, DevSkeleton, DevStat } from './ui'
 
 type Intelligence = {
@@ -27,10 +28,11 @@ function computeIntelligence(): Intelligence {
   const milestones = getMilestones()
   const batches = getBatches()
   const risks = getRisks()
+  const projects = getProjects()
   const projectCompletion =
-    PROJECTS.length === 0
+    projects.length === 0
       ? 0
-      : Math.round(PROJECTS.reduce((sum, p) => sum + (getMilestoneProgress(p.slug) ?? p.progress), 0) / PROJECTS.length)
+      : Math.round(projects.reduce((sum, p) => sum + getProjectIntelligence(p.slug).progress, 0) / projects.length)
   const milestoneCompletion =
     milestones.length === 0 ? 0 : Math.round((milestones.filter(m => m.status === 'Complete').length / milestones.length) * 100)
   const batchCompletion =

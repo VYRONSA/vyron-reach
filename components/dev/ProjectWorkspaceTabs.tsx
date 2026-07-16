@@ -4,8 +4,16 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import type { Project } from '@/lib/dev/projectsData'
 import { getActivityEvents } from '@/lib/dev/activityFeed'
+import type { GitIntelligence } from '@/lib/dev/gitIntelligence'
+import type { DeploymentIntelligence } from '@/lib/dev/deploymentIntelligence'
+import type { BuildIntelligence } from '@/lib/dev/buildIntelligence'
 import { DevBadge, DevCard, DevTabBar } from './ui'
-import { ProjectPulse } from './ProjectPulse'
+import { ExecutiveCommandCentre } from './ExecutiveCommandCentre'
+import { DevelopmentPlanPanel } from './DevelopmentPlanPanel'
+import { GitIntelligenceCard } from './GitIntelligenceCard'
+import { DeploymentIntelligenceCard } from './DeploymentIntelligenceCard'
+import { BuildIntelligenceCard } from './BuildIntelligenceCard'
+import { LatestHandoverCard } from './LatestHandoverCard'
 import { ProjectListSection } from './ProjectListSection'
 import { DecisionsBoard } from './DecisionsBoard'
 import { MilestonesBoard } from './MilestonesBoard'
@@ -78,7 +86,21 @@ const CATEGORY_TONE: Record<string, 'neutral' | 'info' | 'warning' | 'success' |
   Prompts: 'neutral',
 }
 
-export function ProjectWorkspaceTabs({ project }: { project: Project }) {
+export function ProjectWorkspaceTabs({
+  project,
+  buildStatus,
+  typescriptStatus,
+  git,
+  deployment,
+  build,
+}: {
+  project: Project
+  buildStatus?: string
+  typescriptStatus?: string
+  git?: GitIntelligence
+  deployment?: DeploymentIntelligence
+  build?: BuildIntelligence
+}) {
   const [tab, setTab] = useState<Tab>('overview')
   const [activity, setActivity] = useState<ReturnType<typeof getActivityEvents>>([])
   const [activityHydrated, setActivityHydrated] = useState(false)
@@ -115,13 +137,39 @@ export function ProjectWorkspaceTabs({ project }: { project: Project }) {
 
   return (
     <div>
-      <ProjectPulse project={project} />
+      <div className="mb-6">
+        <ExecutiveCommandCentre
+          projectSlug={project.slug}
+          buildStatus={buildStatus}
+          typescriptStatus={typescriptStatus}
+          git={git}
+          deployment={deployment}
+          build={build}
+        />
+      </div>
 
       <DevTabBar tabs={TABS} active={tab} onChange={handleTabChange} />
 
       <div key={tab} className="dev-fade-in pt-6">
         {tab === 'overview' ? (
           <div className="space-y-4">
+            <LatestHandoverCard projectSlug={project.slug} />
+
+            <DevelopmentPlanPanel
+              projectSlug={project.slug}
+              buildStatus={buildStatus}
+              typescriptStatus={typescriptStatus}
+              git={git}
+              deployment={deployment}
+              build={build}
+            />
+
+            <GitIntelligenceCard git={git} />
+
+            <DeploymentIntelligenceCard deployment={deployment} />
+
+            <BuildIntelligenceCard build={build} />
+
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <DevCard eyebrow="Notes" title="Notes">
                 <p className="mt-2 text-sm leading-relaxed text-[var(--dev-text-muted)]">{project.notes}</p>

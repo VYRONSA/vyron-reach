@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import pkg from '@/package.json'
 import { getGitInfo } from './gitInfo'
+import { getBuildIntelligence } from './buildIntelligence'
 import lastValidation from './lastValidation.json'
 
 const UNAVAILABLE = 'Unavailable'
@@ -55,6 +56,7 @@ export type SystemInfo = {
 }
 
 export function getSystemInfo(): SystemInfo {
+  const build = getBuildIntelligence()
   return {
     appVersion: pkg.version,
     nodeVersion: process.version,
@@ -63,8 +65,8 @@ export function getSystemInfo(): SystemInfo {
     routeCount: countRoutes(),
     devPortalVersion: DEV_PORTAL_VERSION,
     git: getGitInfo(),
-    typescriptStatus: lastValidation.typescript === 'passing' ? 'Passing' : 'Failing',
-    buildStatus: lastValidation.build === 'passing' ? 'Passing' : 'Failing',
+    typescriptStatus: build.lastTypeScriptStatus,
+    buildStatus: build.lastBuildStatus,
     lastValidatedAt: lastValidation.checkedAt,
     now: new Date().toISOString(),
   }

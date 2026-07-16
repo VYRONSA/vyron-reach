@@ -3,30 +3,23 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useDevPreferences } from '@/context/dev/DevPreferencesContext'
-import { getProjectBySlug } from '@/lib/dev/projectsData'
-import { getTasks, PRIORITY_LABEL, type Task } from '@/lib/dev/queueStorage'
-import { getCurrentMilestone, type Milestone } from '@/lib/dev/milestonesStorage'
-import { getCurrentBatchForProject, type Batch } from '@/lib/dev/batchesStorage'
+import { getProjectIntelligence, type ProjectIntelligence } from '@/lib/dev/projectIntelligence'
+import { getTasks, PRIORITY_LABEL } from '@/lib/dev/queueStorage'
 import { openHighRisks, type Risk } from '@/lib/dev/risksStorage'
 import { outstandingDebt, type TechnicalDebt } from '@/lib/dev/technicalDebtStorage'
 import { recentlyCompleted, type ActivityEvent } from '@/lib/dev/activityFeed'
-import { getDecisions, type Decision } from '@/lib/dev/decisionsStorage'
 import { getJournalEntries, type JournalEntry } from '@/lib/dev/journalStorage'
 import { getPrompts, type Prompt } from '@/lib/dev/promptsStorage'
 import { DevBadge, DevCard, DevSkeleton } from './ui'
 
 type Briefing = {
-  project: ReturnType<typeof getProjectBySlug>
-  milestone: Milestone | null
-  batch: Batch | null
-  openTasks: Task[]
+  intel: ProjectIntelligence
+  openTaskCount: number
   highRisks: Risk[]
   debt: TechnicalDebt[]
   completed: ActivityEvent[]
-  decision: Decision | null
   journalEntry: JournalEntry | null
   prompt: Prompt | null
-  suggested: Task | null
 }
 
 function greeting(): string {
@@ -36,32 +29,26 @@ function greeting(): string {
   return 'Good evening'
 }
 
+/**
+ * Current project/milestone/batch and the suggested next task come straight
+ * from the Project Intelligence Engine. Open high risks, tech debt, and
+ * recently completed work stay app-wide by design — the briefing is meant to
+ * surface things that need attention regardless of which project is default.
+ */
 function loadBriefing(defaultSlug: string): Briefing {
-  const project = defaultSlug ? getProjectBySlug(defaultSlug) : undefined
-  const milestone = defaultSlug ? getCurrentMilestone(defaultSlug) : null
-  const batch = defaultSlug ? getCurrentBatchForProject(defaultSlug) : null
-  const openTasks = getTasks().filter(t => (!defaultSlug || t.project === defaultSlug) && t.status !== 'done')
-  const [decision] = getDecisions()
+  const intel = getProjectIntelligence(defaultSlug)
+  const openTaskCount = getTasks().filter(t => (!defaultSlug || t.project === defaultSlug) && t.status !== 'done').length
   const [journalEntry] = getJournalEntries()
   const [prompt] = [...getPrompts()].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
-  const suggested =
-    openTasks.find(t => t.status !== 'blocked' && t.priority === 'high') ??
-    openTasks.find(t => t.status !== 'blocked' && t.priority === 'medium') ??
-    openTasks.find(t => t.status !== 'blocked') ??
-    null
 
   return {
-    project,
-    milestone,
-    batch,
-    openTasks,
+    intel,
+    openTaskCount,
     highRisks: openHighRisks(),
     debt: outstandingDebt(),
     completed: recentlyCompleted(3),
-    decision: decision ?? null,
     journalEntry: journalEntry ?? null,
     prompt: prompt ?? null,
-    suggested,
   }
 }
 
@@ -84,17 +71,19 @@ export function DailyBriefing() {
     )
   }
 
+  const { intel } = briefing
+  const recentDecision = intel.recentDecisions[0] ?? null
   const dateLabel = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
 
   return (
     <DevCard className="mb-8" eyebrow={dateLabel} title={`${greeting()} — here's today's briefing.`}>
       <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
-        <BriefRow label="Current Project" value={briefing.project?.name ?? 'None set'} />
-        <BriefRow label="Current Milestone" value={briefing.milestone?.title ?? 'None set'} />
-        <BriefRow label="Current Batch" value={briefing.batch ? `Batch ${briefing.batch.batchNumber}` : 'None active'} />
+        <BriefRow label="Current Project" value={intel.project?.name ?? 'None set'} />
+        <BriefRow label="Current Milestone" value={intel.currentMilestone?.title ?? 'None set'} />
+        <BriefRow label="Current Batch" value={intel.currentBatch ? `Batch ${intel.currentBatch.batchNumber}` : 'None active'} />
         <BriefRow
           label="Today's Objectives"
-          value={briefing.openTasks.length === 0 ? 'Nothing queued' : `${briefing.openTasks.length} open task${briefing.openTasks.length === 1 ? '' : 's'}`}
+          value={briefing.openTaskCount === 0 ? 'Nothing queued' : `${briefing.openTaskCount} open task${briefing.openTaskCount === 1 ? '' : 's'}`}
           href="/dev/queue"
         />
         <BriefRow
@@ -111,8 +100,8 @@ export function DailyBriefing() {
         />
         <BriefRow
           label="Recent Decision"
-          value={briefing.decision?.decision ?? 'None recorded yet'}
-          href={briefing.decision ? `/dev/decisions?focus=${briefing.decision.id}` : undefined}
+          value={recentDecision?.decision ?? 'None recorded yet'}
+          href={recentDecision ? `/dev/decisions?focus=${recentDecision.id}` : undefined}
         />
         <BriefRow
           label="Last Journal Entry"
@@ -153,15 +142,15 @@ export function DailyBriefing() {
             Suggested Next Task
           </div>
           <div className="mt-1 truncate text-sm font-medium text-[var(--dev-text)]">
-            {briefing.suggested?.title ?? 'Nothing queued — add a task to get started'}
+            {intel.nextRecommendedTask?.title ?? 'Nothing queued — add a task to get started'}
           </div>
         </div>
-        {briefing.suggested ? (
+        {intel.nextRecommendedTask ? (
           <div className="flex shrink-0 items-center gap-2">
-            <DevBadge tone={briefing.suggested.priority === 'high' ? 'danger' : briefing.suggested.priority === 'medium' ? 'warning' : 'neutral'}>
-              {PRIORITY_LABEL[briefing.suggested.priority]}
+            <DevBadge tone={intel.nextRecommendedTask.priority === 'high' ? 'danger' : intel.nextRecommendedTask.priority === 'medium' ? 'warning' : 'neutral'}>
+              {PRIORITY_LABEL[intel.nextRecommendedTask.priority]}
             </DevBadge>
-            <Link href={`/dev/queue?focus=${briefing.suggested.id}`} className="text-xs font-medium text-[var(--dev-accent)] hover:underline">
+            <Link href={`/dev/queue?focus=${intel.nextRecommendedTask.id}`} className="text-xs font-medium text-[var(--dev-accent)] hover:underline">
               Open &rarr;
             </Link>
           </div>

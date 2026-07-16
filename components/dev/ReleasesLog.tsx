@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { PROJECTS, getProjectName } from '@/lib/dev/projectsData'
+import { getProjects, getProjectName } from '@/lib/dev/projectsData'
 import { getMilestones } from '@/lib/dev/milestonesStorage'
 import { createRelease, deleteRelease, getReleases, type Release } from '@/lib/dev/releasesStorage'
 import { DevButton, DevCard, DevEmptyState, DevInput, DevSelect, DevTextarea } from './ui'
@@ -90,7 +90,7 @@ export function ReleasesLog({ projectFilter }: { projectFilter?: string }) {
                   onChange={e => setForm(prev => ({ ...prev, project: e.target.value, relatedMilestone: '' }))}
                 >
                   <option value="">Unassigned</option>
-                  {PROJECTS.map(p => (
+                  {getProjects().map(p => (
                     <option key={p.slug} value={p.slug}>
                       {p.name}
                     </option>

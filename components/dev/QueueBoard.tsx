@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { PROJECTS } from '@/lib/dev/projectsData'
+import { getProjects } from '@/lib/dev/projectsData'
 import {
   createTask,
   deleteTask,
@@ -103,7 +103,7 @@ export function QueueBoard({ projectFilter, compact = false }: { projectFilter?:
     refresh()
   }
 
-  const projectName = (slug: string) => PROJECTS.find(p => p.slug === slug)?.name ?? (slug ? slug : 'Unassigned')
+  const projectName = (slug: string) => getProjects().find(p => p.slug === slug)?.name ?? (slug ? slug : 'Unassigned')
 
   if (!hydrated) {
     return <div className="text-sm text-[var(--dev-text-faint)]">Loading queue...</div>
@@ -134,7 +134,7 @@ export function QueueBoard({ projectFilter, compact = false }: { projectFilter?:
         {!projectFilter ? (
           <DevSelect value={project} onChange={e => setProject(e.target.value)} className="sm:w-44">
             <option value="">Unassigned</option>
-            {PROJECTS.map(p => (
+            {getProjects().map(p => (
               <option key={p.slug} value={p.slug}>
                 {p.name}
               </option>

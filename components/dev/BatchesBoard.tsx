@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { PROJECTS } from '@/lib/dev/projectsData'
+import { getProjects } from '@/lib/dev/projectsData'
 import { useDevPreferences } from '@/context/dev/DevPreferencesContext'
 import { getMilestones, type Milestone } from '@/lib/dev/milestonesStorage'
 import {
@@ -30,7 +30,7 @@ const STATUS_TONE: Record<BatchStatus, 'neutral' | 'info' | 'success'> = {
 function milestoneLabel(milestones: Milestone[], id: string) {
   const m = milestones.find(x => x.id === id)
   if (!m) return 'Unassigned'
-  const project = PROJECTS.find(p => p.slug === m.project)
+  const project = getProjects().find(p => p.slug === m.project)
   return project ? `${m.title} — ${project.name}` : m.title
 }
 

@@ -31,3 +31,15 @@ export function isValidDevToken(token: string | undefined | null): boolean {
   if (a.length !== b.length) return false
   return timingSafeEqual(a, b)
 }
+
+/**
+ * Owner-only capability gate for /dev/admin. Deliberately a single env
+ * flag, not a real role system — VYRON DEV has exactly one Developer
+ * login today, so this just decides whether that one user may also
+ * administer the platform. Designed to be swapped for a real per-user
+ * role lookup later without touching any call site: every caller asks
+ * "is the current session an owner?", never "is DEV_OWNER set?".
+ */
+export function isOwner(): boolean {
+  return process.env.DEV_OWNER === 'true'
+}

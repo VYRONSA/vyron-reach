@@ -2,16 +2,18 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { PROJECTS, STATUS_LABEL, STATUS_TONE } from '@/lib/dev/projectsData'
+import { getProjects, STATUS_LABEL, STATUS_TONE, type Project } from '@/lib/dev/projectsData'
 import { getTasks } from '@/lib/dev/queueStorage'
 import { useDevPreferences } from '@/context/dev/DevPreferencesContext'
-import { DevBadge, DevPageHeader } from '@/components/dev/ui'
+import { DevBadge, DevPageHeader, DevSkeleton } from '@/components/dev/ui'
 
 export default function DevProjectsPage() {
   const { preferences, hydrated } = useDevPreferences()
+  const [projects, setProjects] = useState<Project[] | null>(null)
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({})
 
   useEffect(() => {
+    setProjects(getProjects().filter(p => !p.archived))
     const tasks = getTasks()
     const counts: Record<string, number> = {}
     for (const task of tasks) {
@@ -30,7 +32,15 @@ export default function DevProjectsPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {PROJECTS.map(project => (
+        {!projects
+          ? Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-2xl border border-[var(--dev-border)] bg-[var(--dev-surface)] p-5">
+                <DevSkeleton className="h-4 w-32" />
+                <DevSkeleton className="mt-2 h-3 w-full" />
+                <DevSkeleton className="mt-4 h-1.5 w-full" />
+              </div>
+            ))
+          : projects.map(project => (
           <Link
             key={project.slug}
             href={`/dev/projects/${project.slug}`}

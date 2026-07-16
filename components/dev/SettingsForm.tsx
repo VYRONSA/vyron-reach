@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { PROJECTS } from '@/lib/dev/projectsData'
+import { getProjects } from '@/lib/dev/projectsData'
 import { useDevPreferences } from '@/context/dev/DevPreferencesContext'
 import { DevButton, DevCard, DevInput, DevSelect } from './ui'
 
@@ -79,7 +79,7 @@ export function SettingsForm() {
             className="w-48"
           >
             <option value="">None</option>
-            {PROJECTS.map(p => (
+            {getProjects().map(p => (
               <option key={p.slug} value={p.slug}>
                 {p.name}
               </option>

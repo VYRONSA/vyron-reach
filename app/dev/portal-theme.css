@@ -38,6 +38,18 @@
   min-height: 100vh;
 }
 
+/*
+ * Administration Centre — same base tokens as the rest of VYRON DEV, but
+ * a distinct amber accent (in place of the workspace's sky blue) so the
+ * owner always knows, at a glance, that they've left day-to-day
+ * development and are configuring the operating system itself.
+ */
+.dev-admin-root {
+  --dev-accent: #f59e0b;
+  --dev-accent-strong: #b45309;
+  --dev-accent-soft: rgba(245, 158, 11, 0.1);
+}
+
 @keyframes dev-fade-in {
   from {
     opacity: 0;

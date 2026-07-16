@@ -237,3 +237,56 @@ export function DevEmptyState({ children }: { children: ReactNode }) {
 export function DevSkeleton({ className = '' }: { className?: string }) {
   return <div className={`dev-skeleton rounded-md ${className}`} />
 }
+
+/**
+ * A labelled data field inside a DevCard — label in small uppercase
+ * caps, value below. Shared by every intelligence card (Development
+ * Session, Development Plan, Git/Deployment/Build Intelligence) instead
+ * of each one defining its own identical local component.
+ */
+export function DevField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--dev-text-faint)]">{label}</div>
+      <div className="mt-1">{children}</div>
+    </div>
+  )
+}
+
+/**
+ * The accent-coloured section title row used at the top of every
+ * intelligence card, with an optional trailing badge (e.g. a readiness
+ * indicator). Shared so Git/Deployment/Build Intelligence and the
+ * Development Plan panel don't each hand-roll the same header markup.
+ */
+export function DevCardHeader({ title, badge }: { title: string; badge?: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--dev-accent)]">{title}</div>
+      {badge}
+    </div>
+  )
+}
+
+/** A bare, muted section heading dividing groups of DevFields inside a larger card (e.g. the Executive Command Centre's Git/Build/Deployment groupings). */
+export function DevSectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--dev-text-faint)]">{children}</div>
+  )
+}
+
+export type DevReadiness = 'Ready' | 'Needs Review' | 'Blocked'
+
+/** Shared tone mapping for the Ready / Needs Review / Blocked readiness enum every intelligence engine produces. */
+export function devReadinessTone(readiness: DevReadiness): 'success' | 'warning' | 'danger' {
+  if (readiness === 'Ready') return 'success'
+  if (readiness === 'Needs Review') return 'warning'
+  return 'danger'
+}
+
+/** Shared tone mapping for Passing / Failing / Unknown validation-style statuses (build, TypeScript, runtime). */
+export function devValidationTone(status: string): 'success' | 'neutral' | 'danger' {
+  if (status === 'Passing') return 'success'
+  if (status === 'Unknown') return 'neutral'
+  return 'danger'
+}

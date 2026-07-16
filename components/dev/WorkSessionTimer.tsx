@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { PROJECTS } from '@/lib/dev/projectsData'
+import { getProjects } from '@/lib/dev/projectsData'
 import {
   currentElapsedSeconds,
   formatClock,
@@ -64,7 +64,7 @@ export function WorkSessionTimer({ projectFilter }: { projectFilter?: string }) 
   }
   const cancelStop = () => setShowStopNotes(false)
 
-  const projectName = PROJECTS.find(p => p.slug === timer.project)?.name
+  const projectName = getProjects().find(p => p.slug === timer.project)?.name
 
   return (
     <DevCard eyebrow="Focus" title="Work Session Timer">
@@ -74,7 +74,7 @@ export function WorkSessionTimer({ projectFilter }: { projectFilter?: string }) 
             {!projectFilter ? (
               <DevSelect value={project} onChange={e => setProject(e.target.value)}>
                 <option value="">No project</option>
-                {PROJECTS.map(p => (
+                {getProjects().map(p => (
                   <option key={p.slug} value={p.slug}>
                     {p.name}
                   </option>

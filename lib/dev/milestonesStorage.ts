@@ -7,10 +7,12 @@ export type Milestone = {
   project: string // project slug, or '' for none
   title: string
   description: string
+  phase: string
   startDate: string
   targetDate: string
   progress: number
   status: MilestoneStatus
+  archived: boolean
   createdAt: string
   updatedAt: string
 }
@@ -19,8 +21,10 @@ const KEY = 'vyron-dev-milestones-v1'
 
 export const MILESTONE_STATUS_OPTIONS: MilestoneStatus[] = ['Upcoming', 'In Progress', 'At Risk', 'Complete']
 
+type StoredMilestone = Omit<Milestone, 'phase' | 'archived'> & Partial<Pick<Milestone, 'phase' | 'archived'>>
+
 export function getMilestones(): Milestone[] {
-  return readLocal<Milestone[]>(KEY, [])
+  return readLocal<StoredMilestone[]>(KEY, []).map(m => ({ phase: '', archived: false, ...m }))
 }
 
 function saveMilestones(items: Milestone[]) {
@@ -31,6 +35,7 @@ export function createMilestone(input: {
   project: string
   title: string
   description: string
+  phase: string
   startDate: string
   targetDate: string
   progress: number
@@ -41,6 +46,7 @@ export function createMilestone(input: {
     id: `milestone_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     ...input,
     title: input.title.trim(),
+    archived: false,
     createdAt: now,
     updatedAt: now,
   }
@@ -53,6 +59,14 @@ export function createMilestone(input: {
 export function updateMilestone(id: string, patch: Partial<Omit<Milestone, 'id' | 'createdAt'>>) {
   const items = getMilestones().map(m => (m.id === id ? { ...m, ...patch, updatedAt: new Date().toISOString() } : m))
   saveMilestones(items)
+}
+
+export function archiveMilestone(id: string) {
+  updateMilestone(id, { archived: true })
+}
+
+export function restoreMilestone(id: string) {
+  updateMilestone(id, { archived: false })
 }
 
 export function deleteMilestone(id: string) {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { PROJECTS } from '@/lib/dev/projectsData'
+import { getProjects } from '@/lib/dev/projectsData'
 import {
   AI_STATUS_LABEL,
   getAiWorkspace,
@@ -82,7 +82,7 @@ export function AiWorkspaceCard({
               onChange={e => setEntry(prev => ({ ...prev, currentProject: e.target.value }))}
             >
               <option value="">None</option>
-              {PROJECTS.map(p => (
+              {getProjects().map(p => (
                 <option key={p.slug} value={p.slug}>
                   {p.name}
                 </option>

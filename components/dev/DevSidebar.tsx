@@ -28,6 +28,17 @@ const NAV_ITEMS: { href: string; label: string; icon: ReactNode }[] = [
     ),
   },
   {
+    href: '/dev/handovers',
+    label: 'Handovers',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-[18px] w-[18px]">
+        <path d="M8 3v4M16 3v4M4 9h16" />
+        <rect x="4" y="5" width="16" height="16" rx="2" />
+        <path d="M9 14l2 2 4-4" />
+      </svg>
+    ),
+  },
+  {
     href: '/dev/portfolio',
     label: 'Product Portfolio',
     icon: (
@@ -169,7 +180,7 @@ const NAV_ITEMS: { href: string; label: string; icon: ReactNode }[] = [
   },
 ]
 
-export function DevSidebar() {
+export function DevSidebar({ owner }: { owner: boolean }) {
   const pathname = usePathname()
   const { preferences, toggleSidebar } = useDevPreferences()
   const collapsed = preferences.sidebarCollapsed
@@ -216,6 +227,29 @@ export function DevSidebar() {
             </Link>
           )
         })}
+
+        {owner ? (
+          <Link
+            href="/dev/admin"
+            title={collapsed ? 'Administration' : undefined}
+            aria-current={pathname?.startsWith('/dev/admin') ? 'page' : undefined}
+            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13.5px] font-medium transition-colors ${
+              collapsed ? 'justify-center px-0' : ''
+            } ${
+              pathname?.startsWith('/dev/admin')
+                ? 'bg-amber-500/10 text-amber-500 ring-1 ring-inset ring-amber-500/20 dark:text-amber-400'
+                : 'text-[var(--dev-text-muted)] hover:bg-[var(--dev-surface-hover)] hover:text-[var(--dev-text)]'
+            }`}
+          >
+            <span className={pathname?.startsWith('/dev/admin') ? 'text-amber-500 dark:text-amber-400' : 'text-[var(--dev-text-faint)]'}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-[18px] w-[18px]">
+                <path d="M12 3 4 6.5V11c0 4.6 3.2 8.9 8 10 4.8-1.1 8-5.4 8-10V6.5Z" />
+                <path d="M9.5 12l1.8 1.8L15 10" />
+              </svg>
+            </span>
+            {!collapsed ? <span className="truncate">Administration</span> : null}
+          </Link>
+        ) : null}
       </nav>
 
       <button

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { PROJECTS, getProjectName } from '@/lib/dev/projectsData'
+import { getProjects, getProjectName } from '@/lib/dev/projectsData'
 import {
   createJournalEntry,
   deleteJournalEntry,
@@ -138,7 +138,7 @@ export function JournalBoard({ projectFilter }: { projectFilter?: string }) {
             {!projectFilter ? (
               <DevSelect value={form.project} onChange={e => setForm(prev => ({ ...prev, project: e.target.value }))}>
                 <option value="">No project</option>
-                {PROJECTS.map(p => (
+                {getProjects().map(p => (
                   <option key={p.slug} value={p.slug}>
                     {p.name}
                   </option>

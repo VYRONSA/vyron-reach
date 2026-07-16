@@ -2,14 +2,12 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { PROJECTS, STATUS_LABEL, STATUS_TONE, type Project } from '@/lib/dev/projectsData'
+import { getProjects, STATUS_LABEL, STATUS_TONE, type Project } from '@/lib/dev/projectsData'
 import { useDevPreferences } from '@/context/dev/DevPreferencesContext'
-import { getTasks } from '@/lib/dev/queueStorage'
-import { getCurrentMilestone, getMilestoneProgress } from '@/lib/dev/milestonesStorage'
-import { getCurrentBatchForProject } from '@/lib/dev/batchesStorage'
-import { openRisksForProject } from '@/lib/dev/risksStorage'
+import { tasksForProject } from '@/lib/dev/queueStorage'
 import { getProjectList } from '@/lib/dev/projectLists'
-import { computeProjectHealth, HEALTH_TONE, type ProjectHealth } from '@/lib/dev/projectHealth'
+import { getProjectIntelligence } from '@/lib/dev/projectIntelligence'
+import { HEALTH_TONE, type ProjectHealth } from '@/lib/dev/projectHealth'
 import { DevBadge, DevPageHeader } from '@/components/dev/ui'
 
 type PortfolioStats = {
@@ -22,32 +20,34 @@ type PortfolioStats = {
   health: ProjectHealth
 }
 
+/** Sourced from the Project Intelligence Engine wherever the engine already covers it. */
 function computeStats(project: Project): PortfolioStats {
-  const tasks = getTasks().filter(t => t.project === project.slug && t.status !== 'done')
-  const milestone = getCurrentMilestone(project.slug)
-  const batch = getCurrentBatchForProject(project.slug)
-  const risks = openRisksForProject(project.slug)
+  const intel = getProjectIntelligence(project.slug)
+  const openTasks = tasksForProject(project.slug).filter(t => t.status !== 'done')
   const upcoming = getProjectList(project.slug, 'upcoming')[0]
 
   return {
-    progress: getMilestoneProgress(project.slug) ?? project.progress,
-    milestoneLabel: milestone?.title ?? project.milestone,
-    batchLabel: batch ? `Batch ${batch.batchNumber}` : 'No active batch',
-    openTasks: tasks.length,
-    openRisks: risks.length,
+    progress: intel.progress,
+    milestoneLabel: intel.currentMilestone?.title ?? project.milestone,
+    batchLabel: intel.currentBatch ? `Batch ${intel.currentBatch.batchNumber}` : 'No active batch',
+    openTasks: openTasks.length,
+    openRisks: intel.openRisks.length,
     upcoming: upcoming?.title ?? 'Nothing planned yet',
-    health: computeProjectHealth(project.slug),
+    health: intel.health,
   }
 }
 
 export default function DevPortfolioPage() {
   const { preferences, hydrated: prefsHydrated, setPreferences } = useDevPreferences()
   const [hydrated, setHydrated] = useState(false)
+  const [projects, setProjects] = useState<Project[]>([])
   const [stats, setStats] = useState<Record<string, PortfolioStats>>({})
 
   useEffect(() => {
+    const list = getProjects().filter(p => !p.archived)
     const next: Record<string, PortfolioStats> = {}
-    for (const project of PROJECTS) next[project.slug] = computeStats(project)
+    for (const project of list) next[project.slug] = computeStats(project)
+    setProjects(list)
     setStats(next)
     setHydrated(true)
   }, [])
@@ -68,7 +68,7 @@ export default function DevPortfolioPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {PROJECTS.map(project => {
+        {projects.map(project => {
           const s = stats[project.slug]
           const pinned = prefsHydrated && preferences.pinnedProjects.includes(project.slug)
           return (

@@ -14,6 +14,7 @@ export type Batch = {
   claudePrompt: string
   completionDate: string
   status: BatchStatus
+  archived: boolean
   createdAt: string
   updatedAt: string
 }
@@ -22,8 +23,10 @@ const KEY = 'vyron-dev-batches-v1'
 
 export const BATCH_STATUS_OPTIONS: BatchStatus[] = ['Queued', 'Active', 'Complete']
 
+type StoredBatch = Omit<Batch, 'archived'> & Partial<Pick<Batch, 'archived'>>
+
 export function getBatches(): Batch[] {
-  return readLocal<Batch[]>(KEY, [])
+  return readLocal<StoredBatch[]>(KEY, []).map(b => ({ archived: false, ...b }))
 }
 
 function saveBatches(items: Batch[]) {
@@ -46,6 +49,7 @@ export function createBatch(input: {
     id: `batch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     ...input,
     batchNumber: input.batchNumber.trim(),
+    archived: false,
     createdAt: now,
     updatedAt: now,
   }
@@ -58,6 +62,18 @@ export function createBatch(input: {
 export function updateBatch(id: string, patch: Partial<Omit<Batch, 'id' | 'createdAt'>>) {
   const items = getBatches().map(b => (b.id === id ? { ...b, ...patch, updatedAt: new Date().toISOString() } : b))
   saveBatches(items)
+}
+
+export function archiveBatch(id: string) {
+  updateBatch(id, { archived: true })
+}
+
+export function restoreBatch(id: string) {
+  updateBatch(id, { archived: false })
+}
+
+export function completeBatch(id: string) {
+  updateBatch(id, { status: 'Complete', completionDate: new Date().toISOString().slice(0, 10) })
 }
 
 export function deleteBatch(id: string) {

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { PROJECTS } from '@/lib/dev/projectsData'
+import { getProjects, type Project } from '@/lib/dev/projectsData'
 import { KNOWLEDGE_SECTIONS } from '@/lib/dev/knowledgeData'
 import { recordRecentPage, getRecentItems } from '@/lib/dev/recents'
 import { useDevPreferences } from '@/context/dev/DevPreferencesContext'
@@ -16,10 +16,12 @@ import { getBatches } from '@/lib/dev/batchesStorage'
 import { getRisks } from '@/lib/dev/risksStorage'
 import { getTechnicalDebt } from '@/lib/dev/technicalDebtStorage'
 import { getReleases } from '@/lib/dev/releasesStorage'
+import { getHandovers } from '@/lib/dev/handoverStorage'
 
 const NAV_LABELS: { href: string; label: string; group: string }[] = [
   { href: '/dev', label: 'Dashboard', group: 'Portal' },
   { href: '/dev/activity', label: 'Global Activity', group: 'Portal' },
+  { href: '/dev/handovers', label: 'Handover Workspace', group: 'Portal' },
   { href: '/dev/portfolio', label: 'Product Portfolio', group: 'Portal' },
   { href: '/dev/projects', label: 'Projects', group: 'Portal' },
   { href: '/dev/milestones', label: 'Milestones', group: 'Portal' },
@@ -41,7 +43,7 @@ type SearchItem = { href: string; label: string; group: string }
 function staticSearchIndex(): SearchItem[] {
   return [
     ...NAV_LABELS,
-    ...PROJECTS.map(p => ({ href: `/dev/projects/${p.slug}`, label: p.name, group: 'Projects' })),
+    ...getProjects().map(p => ({ href: `/dev/projects/${p.slug}`, label: p.name, group: 'Projects' })),
     ...KNOWLEDGE_SECTIONS.map(s => ({ href: `/dev/knowledge/${s.slug}`, label: s.title, group: 'Knowledge Centre' })),
   ]
 }
@@ -69,7 +71,7 @@ function dynamicSearchIndex(): SearchItem[] {
     const snippet = note.content.trim().slice(0, 60) || 'Empty note'
     items.push({ href: '/dev', label: snippet, group: 'Quick Notes' })
   }
-  for (const project of PROJECTS) {
+  for (const project of getProjects()) {
     items.push({ href: `/dev/projects/${project.slug}`, label: `Product Bible — ${project.name}`, group: 'Product Bibles' })
   }
   for (const milestone of getMilestones()) {
@@ -87,6 +89,13 @@ function dynamicSearchIndex(): SearchItem[] {
   for (const release of getReleases()) {
     items.push({ href: `/dev/milestones?focus=${release.id}`, label: release.version, group: 'Releases' })
   }
+  for (const handover of getHandovers()) {
+    items.push({
+      href: `/dev/handovers?focus=${handover.id}`,
+      label: handover.phase || 'Untitled handover',
+      group: 'Claude Handovers',
+    })
+  }
 
   return items
 }
@@ -94,7 +103,7 @@ function dynamicSearchIndex(): SearchItem[] {
 function pageLabelFor(pathname: string): string {
   const exact = NAV_LABELS.find(n => n.href === pathname)
   if (exact) return exact.label
-  const project = PROJECTS.find(p => pathname === `/dev/projects/${p.slug}`)
+  const project = getProjects().find(p => pathname === `/dev/projects/${p.slug}`)
   if (project) return project.name
   const knowledge = KNOWLEDGE_SECTIONS.find(s => pathname === `/dev/knowledge/${s.slug}`)
   if (knowledge) return knowledge.title
@@ -182,8 +191,8 @@ export function DevExperienceProvider({ children }: { children: ReactNode }) {
     const batches = getBatches()
     const pinned: SearchItem[] = [
       ...preferences.pinnedProjects
-        .map(slug => PROJECTS.find(p => p.slug === slug))
-        .filter((p): p is (typeof PROJECTS)[number] => Boolean(p))
+        .map(slug => getProjects().find(p => p.slug === slug))
+        .filter((p): p is Project => Boolean(p))
         .map(p => ({ href: `/dev/projects/${p.slug}`, label: p.name, group: 'Pinned' })),
       ...preferences.pinnedMilestones
         .map(id => milestones.find(m => m.id === id))

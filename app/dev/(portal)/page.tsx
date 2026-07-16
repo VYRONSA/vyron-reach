@@ -1,12 +1,18 @@
-import { PROJECTS } from '@/lib/dev/projectsData'
-import { getSystemInfo } from '@/lib/dev/systemInfo'
-import { DevGrid, DevPageHeader, DevStat } from '@/components/dev/ui'
+import { getGitIntelligence } from '@/lib/dev/gitIntelligence'
+import { getDeploymentIntelligence } from '@/lib/dev/deploymentIntelligence'
+import { getBuildIntelligence } from '@/lib/dev/buildIntelligence'
+import { DevGrid, DevPageHeader } from '@/components/dev/ui'
 import { QuickActionsCard, RecentPagesCard } from '@/components/dev/DashboardWidgets'
-import { DashboardSummary } from '@/components/dev/DashboardSummary'
 import { PortfolioIntelligence } from '@/components/dev/PortfolioIntelligence'
 import { DailyBriefing } from '@/components/dev/DailyBriefing'
 import { WorkSessionTimer } from '@/components/dev/WorkSessionTimer'
 import { RecentlyUsedCard } from '@/components/dev/RecentlyUsedCard'
+import { ExecutiveCommandCentre } from '@/components/dev/ExecutiveCommandCentre'
+import { DevelopmentPlanPanel } from '@/components/dev/DevelopmentPlanPanel'
+import { GitIntelligenceCard } from '@/components/dev/GitIntelligenceCard'
+import { DeploymentIntelligenceCard } from '@/components/dev/DeploymentIntelligenceCard'
+import { BuildIntelligenceCard } from '@/components/dev/BuildIntelligenceCard'
+import { ProductsTrackedStat } from '@/components/dev/ProductsTrackedStat'
 import {
   FavouriteKnowledgeCard,
   FavouritePromptsCard,
@@ -16,7 +22,13 @@ import {
 } from '@/components/dev/WorkspaceWidgets'
 
 export default function DevDashboardPage() {
-  const info = getSystemInfo()
+  const git = getGitIntelligence()
+  const build = getBuildIntelligence()
+  const deployment = getDeploymentIntelligence({
+    buildStatus: build.lastBuildStatus,
+    typescriptStatus: build.lastTypeScriptStatus,
+    gitReadiness: git.workingTreeStatus,
+  })
 
   return (
     <div>
@@ -26,25 +38,47 @@ export default function DevDashboardPage() {
         description="Everything you need to run VYRON development day to day — focus, health, blockers, and the latest activity across every product."
       />
 
+      <div className="mb-8">
+        <ExecutiveCommandCentre
+          buildStatus={build.lastBuildStatus}
+          typescriptStatus={build.lastTypeScriptStatus}
+          git={git}
+          deployment={deployment}
+          build={build}
+        />
+      </div>
+
       <DailyBriefing />
 
       <DevGrid className="mb-8">
-        <DevStat label="Products Tracked" value={String(PROJECTS.length)} hint="In the portfolio" />
-        <DevStat
-          label="Git Status"
-          value={info.git.branch}
-          hint={info.git.commit !== 'Unavailable' ? `Commit ${info.git.commit}` : undefined}
-          tone={info.git.branch === 'Unavailable' ? 'neutral' : 'success'}
-        />
-        <DevStat label="Build Status" value={info.buildStatus} tone={info.buildStatus === 'Passing' ? 'success' : 'danger'} />
-        <DevStat label="TypeScript" value={info.typescriptStatus} tone={info.typescriptStatus === 'Passing' ? 'success' : 'danger'} />
+        <ProductsTrackedStat />
       </DevGrid>
 
       <div className="mb-8">
         <PortfolioIntelligence />
       </div>
 
-      <DashboardSummary />
+      <div className="mb-8">
+        <DevelopmentPlanPanel
+          buildStatus={build.lastBuildStatus}
+          typescriptStatus={build.lastTypeScriptStatus}
+          git={git}
+          deployment={deployment}
+          build={build}
+        />
+      </div>
+
+      <div className="mb-8">
+        <GitIntelligenceCard git={git} />
+      </div>
+
+      <div className="mb-8">
+        <DeploymentIntelligenceCard deployment={deployment} />
+      </div>
+
+      <div className="mb-8">
+        <BuildIntelligenceCard build={build} />
+      </div>
 
       <div className="mt-8">
         <div className="mb-3 font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--dev-accent)]">

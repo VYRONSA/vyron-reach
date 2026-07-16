@@ -1,41 +1,32 @@
-import { notFound } from 'next/navigation'
-import Link from 'next/link'
-import { getProjectBySlug, PROJECTS, STATUS_LABEL, STATUS_TONE } from '@/lib/dev/projectsData'
-import { DevBadge, DevPageHeader } from '@/components/dev/ui'
-import { ProjectVisitTracker } from '@/components/dev/ProjectVisitTracker'
-import { ProjectWorkspaceTabs } from '@/components/dev/ProjectWorkspaceTabs'
+import { SEED_PROJECT_SLUGS } from '@/lib/dev/projectsData'
+import { getGitIntelligence } from '@/lib/dev/gitIntelligence'
+import { getDeploymentIntelligence } from '@/lib/dev/deploymentIntelligence'
+import { getBuildIntelligence } from '@/lib/dev/buildIntelligence'
+import { ProjectDetailView } from '@/components/dev/ProjectDetailView'
 
 export function generateStaticParams() {
-  return PROJECTS.map(p => ({ slug: p.slug }))
+  return SEED_PROJECT_SLUGS.map(slug => ({ slug }))
 }
 
 export default async function DevProjectDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const project = getProjectBySlug(slug)
 
-  if (!project) {
-    notFound()
-  }
+  const git = getGitIntelligence()
+  const build = getBuildIntelligence()
+  const deployment = getDeploymentIntelligence({
+    buildStatus: build.lastBuildStatus,
+    typescriptStatus: build.lastTypeScriptStatus,
+    gitReadiness: git.workingTreeStatus,
+  })
 
   return (
-    <div>
-      <ProjectVisitTracker slug={project.slug} name={project.name} />
-
-      <Link
-        href="/dev/projects"
-        className="mb-4 inline-flex items-center gap-1.5 text-xs text-[var(--dev-text-faint)] hover:text-[var(--dev-text)]"
-      >
-        &larr; All projects
-      </Link>
-
-      <DevPageHeader
-        eyebrow="Project"
-        title={project.name}
-        description={project.description}
-        actions={<DevBadge tone={STATUS_TONE[project.status]}>{STATUS_LABEL[project.status]}</DevBadge>}
-      />
-
-      <ProjectWorkspaceTabs project={project} />
-    </div>
+    <ProjectDetailView
+      slug={slug}
+      buildStatus={build.lastBuildStatus}
+      typescriptStatus={build.lastTypeScriptStatus}
+      git={git}
+      deployment={deployment}
+      build={build}
+    />
   )
 }

@@ -7,7 +7,7 @@ import { DevTopbar } from './DevTopbar'
 import { QuickNotesPanel } from './QuickNotesPanel'
 import { FocusModeView } from './FocusModeView'
 
-export function DevPortalShell({ children }: { children: ReactNode }) {
+export function DevPortalShell({ children, owner }: { children: ReactNode; owner: boolean }) {
   const { preferences, hydrated } = useDevPreferences()
   const focusMode = hydrated && preferences.focusMode
 
@@ -17,7 +17,7 @@ export function DevPortalShell({ children }: { children: ReactNode }) {
         <FocusModeView />
       ) : (
         <div className="flex min-h-screen">
-          <DevSidebar />
+          <DevSidebar owner={owner} />
           <div className="flex min-w-0 flex-1 flex-col">
             <DevTopbar />
             <main className="min-w-0 flex-1">

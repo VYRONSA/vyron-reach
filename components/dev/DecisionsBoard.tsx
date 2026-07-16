@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { PROJECTS, getProjectName } from '@/lib/dev/projectsData'
+import { getProjects, getProjectName } from '@/lib/dev/projectsData'
 import {
   createDecision,
   DECISION_STATUS_OPTIONS,
@@ -253,7 +253,7 @@ export function DecisionsBoard({ projectFilter }: { projectFilter?: string }) {
                 onChange={e => setForm(prev => ({ ...prev, relatedProject: e.target.value, relatedMilestone: '' }))}
               >
                 <option value="">Unassigned</option>
-                {PROJECTS.map(p => (
+                {getProjects().map(p => (
                   <option key={p.slug} value={p.slug}>
                     {p.name}
                   </option>
