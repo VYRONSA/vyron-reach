@@ -36,6 +36,11 @@ yarn-error.log*
 # vercel
 .vercel
 
+# VYRON DEV runtime — local job history for the Claude Code execution runtime
+/.vyron-dev/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.vercel

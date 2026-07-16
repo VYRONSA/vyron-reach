@@ -53,6 +53,7 @@ export function ExecutiveCommandCentre({
   const [plan, setPlan] = useState<DevelopmentPlan | null>(null)
   const [events, setEvents] = useState<DevelopmentEvent[]>([])
   const [dependencies, setDependencies] = useState<DevelopmentDependencyStatus | null>(null)
+  const [refreshToken, setRefreshToken] = useState(0)
 
   useEffect(() => {
     const context = { buildStatus, typescriptStatus, git, deployment, build }
@@ -61,7 +62,8 @@ export function ExecutiveCommandCentre({
     setPlan(status.plan)
     setEvents(developmentEventsForProject(slug, { git, build, deployment }))
     setDependencies(developmentDependencyStatusForProject(slug, context))
-  }, [slug, buildStatus, typescriptStatus, git, deployment, build])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, buildStatus, typescriptStatus, git, deployment, build, refreshToken])
 
   const ready = session !== null && plan !== null && dependencies !== null && (Boolean(projectSlug) || prefsHydrated)
 
@@ -84,7 +86,13 @@ export function ExecutiveCommandCentre({
 
   return (
     <div>
-      <MissionControl session={session} queue={actionQueue} generatedPrompt={generatedPrompt} />
+      <MissionControl
+        slug={slug}
+        session={session}
+        queue={actionQueue}
+        generatedPrompt={generatedPrompt}
+        onApplied={() => setRefreshToken(t => t + 1)}
+      />
 
       <div className="mt-4">
       <DevCard>
