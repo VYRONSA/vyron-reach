@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import {
   archiveMilestone,
   createMilestone,
-  getMilestones,
   MILESTONE_STATUS_OPTIONS,
   restoreMilestone,
   updateMilestone,
@@ -24,18 +23,18 @@ function emptyForm(projectSlug: string) {
   return { project: projectSlug, title: '', description: '', phase: '', startDate: '', targetDate: '', progress: 0, status: 'Upcoming' as MilestoneStatus }
 }
 
-export function AdminMilestoneSection({ projectSlug }: { projectSlug: string }) {
-  const [milestones, setMilestones] = useState<Milestone[]>([])
+export function AdminMilestoneSection({
+  projectSlug,
+  milestones,
+  onChange,
+}: {
+  projectSlug: string
+  milestones: Milestone[]
+  onChange: () => void
+}) {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState(emptyForm(projectSlug))
-
-  const refresh = () => setMilestones(getMilestones().filter(m => m.project === projectSlug))
-
-  useEffect(() => {
-    refresh()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectSlug])
 
   const startCreate = () => {
     setEditingId(null)
@@ -68,7 +67,7 @@ export function AdminMilestoneSection({ projectSlug }: { projectSlug: string }) 
     }
     setShowForm(false)
     setEditingId(null)
-    refresh()
+    onChange()
   }
 
   return (
@@ -160,11 +159,11 @@ export function AdminMilestoneSection({ projectSlug }: { projectSlug: string }) 
                   Edit
                 </DevButton>
                 {m.archived ? (
-                  <DevButton variant="secondary" onClick={() => { restoreMilestone(m.id); refresh() }}>
+                  <DevButton variant="secondary" onClick={() => { restoreMilestone(m.id); onChange() }}>
                     Restore
                   </DevButton>
                 ) : (
-                  <DevButton variant="danger" onClick={() => { archiveMilestone(m.id); refresh() }}>
+                  <DevButton variant="danger" onClick={() => { archiveMilestone(m.id); onChange() }}>
                     Archive
                   </DevButton>
                 )}

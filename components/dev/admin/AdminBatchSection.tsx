@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, type FormEvent } from 'react'
-import { getMilestones, type Milestone } from '@/lib/dev/milestonesStorage'
+import type { Milestone } from '@/lib/dev/milestonesStorage'
 import {
   archiveBatch,
   BATCH_STATUS_OPTIONS,
@@ -35,24 +35,21 @@ function emptyForm(milestoneId: string) {
   }
 }
 
-export function AdminBatchSection({ projectSlug }: { projectSlug: string }) {
-  const [milestones, setMilestones] = useState<Milestone[]>([])
+export function AdminBatchSection({ projectSlug, milestones }: { projectSlug: string; milestones: Milestone[] }) {
   const [batches, setBatches] = useState<Batch[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState(emptyForm(''))
 
   const refresh = () => {
-    const projectMilestones = getMilestones().filter(m => m.project === projectSlug)
-    const milestoneIds = new Set(projectMilestones.map(m => m.id))
-    setMilestones(projectMilestones)
+    const milestoneIds = new Set(milestones.map(m => m.id))
     setBatches(getBatches().filter(b => milestoneIds.has(b.milestone)))
   }
 
   useEffect(() => {
     refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectSlug])
+  }, [projectSlug, milestones])
 
   const milestoneTitle = (id: string) => milestones.find(m => m.id === id)?.title ?? 'Unassigned'
 
