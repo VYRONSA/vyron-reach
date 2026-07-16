@@ -1,0 +1,106 @@
+.dev-root {
+  --dev-bg: #07080b;
+  --dev-sidebar: #0a0c10;
+  --dev-surface: #101319;
+  --dev-surface-hover: #161a21;
+  --dev-border: rgba(255, 255, 255, 0.07);
+  --dev-border-strong: rgba(255, 255, 255, 0.14);
+  --dev-text: #f1f5f9;
+  --dev-text-muted: #94a3b8;
+  --dev-text-faint: #64748b;
+  --dev-accent: #38bdf8;
+  --dev-accent-strong: #0284c7;
+  --dev-accent-soft: rgba(56, 189, 248, 0.1);
+  --dev-input-bg: rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
+}
+
+.dev-root[data-theme='light'] {
+  --dev-bg: #f6f7f9;
+  --dev-sidebar: #ffffff;
+  --dev-surface: #ffffff;
+  --dev-surface-hover: #f1f4f8;
+  --dev-border: rgba(15, 23, 42, 0.09);
+  --dev-border-strong: rgba(15, 23, 42, 0.16);
+  --dev-text: #0f172a;
+  --dev-text-muted: #56637a;
+  --dev-text-faint: #8996ab;
+  --dev-accent: #0284c7;
+  --dev-accent-strong: #0369a1;
+  --dev-accent-soft: rgba(2, 132, 199, 0.08);
+  --dev-input-bg: rgba(15, 23, 42, 0.03);
+  color-scheme: light;
+}
+
+.dev-root {
+  background: var(--dev-bg);
+  color: var(--dev-text);
+  min-height: 100vh;
+}
+
+@keyframes dev-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dev-fade-in {
+    animation: dev-fade-in 160ms ease-out both;
+  }
+}
+
+.dev-root {
+  scroll-behavior: smooth;
+}
+
+@keyframes dev-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.dev-skeleton {
+  background: linear-gradient(90deg, var(--dev-surface-hover) 25%, var(--dev-border-strong) 37%, var(--dev-surface-hover) 63%);
+  background-size: 400% 100%;
+  animation: dev-shimmer 1.4s ease infinite;
+}
+
+.dev-lift {
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dev-lift:hover {
+    transform: translateY(-2px);
+  }
+}
+
+.dev-root ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.dev-root ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dev-root ::-webkit-scrollbar-thumb {
+  background-color: var(--dev-border-strong);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.dev-root ::-webkit-scrollbar-thumb:hover {
+  background-color: var(--dev-text-faint);
+  background-clip: content-box;
+}
