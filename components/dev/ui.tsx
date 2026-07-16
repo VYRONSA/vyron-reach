@@ -290,3 +290,13 @@ export function devValidationTone(status: string): 'success' | 'neutral' | 'dang
   if (status === 'Unknown') return 'neutral'
   return 'danger'
 }
+
+/** Shared clipboard helper — every "copy this prompt" action in VYRON DEV goes through this instead of its own try/catch. */
+export async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    return false
+  }
+}

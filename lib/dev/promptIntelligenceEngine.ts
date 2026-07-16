@@ -1,6 +1,7 @@
 import type { DevelopmentSession } from './developmentOrchestrator'
 import type { DevelopmentDependencyStatus } from './developmentDependencyEngine'
 import type { DevelopmentEvent } from './developmentEventEngine'
+import type { DevelopmentConversationMemory } from './developmentConversationMemoryEngine'
 import { getLatestHandover, handoversForBatch, type Handover } from './handoverStorage'
 
 /** The two commands every batch in this project is validated against — not project-specific "business logic", just this repo's fixed validation convention. */
@@ -70,6 +71,26 @@ function buildFilesLikelyAffected(slug: string, session: DevelopmentSession): st
 }
 
 /**
+ * Omitted entirely when there's no previous objective on record (first-ever
+ * session for this project) — never a fabricated "no history" claim, just
+ * nothing to show. Placed before "Objective" so the next Claude session
+ * reads what happened yesterday before what's being asked today.
+ */
+function buildPreviousCycleSection(memory: DevelopmentConversationMemory): string | null {
+  if (!memory.previousObjective) return null
+  const lines: string[] = [`- Previous Objective: ${memory.previousObjective}`, `- Completion Status: ${memory.completionStatus}`]
+  if (memory.remainingWork.length > 0) {
+    lines.push('- Remaining Work:')
+    for (const item of memory.remainingWork.slice(0, 5)) lines.push(`  - ${item.label}`)
+  } else {
+    lines.push('- Remaining Work: None outstanding.')
+  }
+  lines.push(`- Development Drift: ${memory.drift} — ${memory.driftExplanation}`)
+  lines.push(`- Continuity Summary: ${memory.continuitySummary}`)
+  return lines.join('\n')
+}
+
+/**
  * The Prompt Intelligence Engine — deterministic template assembly over
  * already-computed engine outputs. It never calls an AI model and never
  * derives a new fact: every section either reads straight off the
@@ -84,7 +105,8 @@ export function getGeneratedPrompt(
   slug: string,
   session: DevelopmentSession,
   dependencies: DevelopmentDependencyStatus,
-  events: DevelopmentEvent[]
+  events: DevelopmentEvent[],
+  memory: DevelopmentConversationMemory
 ): GeneratedPrompt {
   const sections: PromptSection[] = []
 
@@ -99,6 +121,10 @@ export function getGeneratedPrompt(
       content: `Batch ${session.currentBatch.batchNumber}${session.currentBatch.objective ? `: ${session.currentBatch.objective}` : ''}`,
     })
   }
+
+  const previousCycle = buildPreviousCycleSection(memory)
+  if (previousCycle) sections.push({ heading: 'Previous Development Cycle', content: previousCycle })
+
   if (session.currentObjective) sections.push({ heading: 'Objective', content: session.currentObjective })
 
   sections.push({ heading: 'Current Development State', content: buildDevelopmentStateSummary(session) })

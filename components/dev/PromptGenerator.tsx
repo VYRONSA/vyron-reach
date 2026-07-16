@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import type { GeneratedPrompt } from '@/lib/dev/promptIntelligenceEngine'
-import { DevButton, DevSectionLabel } from './ui'
+import { copyToClipboard, DevButton, DevSectionLabel } from './ui'
 
 /**
  * Renders a Prompt Intelligence Engine result with a copy-to-clipboard
@@ -15,12 +15,10 @@ export function PromptGenerator({ prompt, heading = 'Claude Instruction' }: { pr
   const [copied, setCopied] = useState(false)
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(prompt.fullText)
+    const ok = await copyToClipboard(prompt.fullText)
+    if (ok) {
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1500)
-    } catch {
-      // clipboard unavailable — no-op
     }
   }
 

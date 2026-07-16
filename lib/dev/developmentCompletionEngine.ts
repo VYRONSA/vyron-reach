@@ -4,9 +4,12 @@ import { updateMilestone } from './milestonesStorage'
 import { getProjectIntelligence, type ProjectIntelligenceContext } from './projectIntelligence'
 import { getDevelopmentIntelligence } from './developmentIntelligence'
 import { getDevelopmentSession } from './developmentOrchestrator'
+import { getDevelopmentPlan } from './aiPlanningEngine'
 import { developmentDependencyStatusForProject } from './developmentDependencyEngine'
 import { developmentEventsForProject } from './developmentEventEngine'
+import { getDevelopmentConversationMemory } from './developmentConversationMemoryEngine'
 import { getGeneratedPrompt, type GeneratedPrompt } from './promptIntelligenceEngine'
+import { determineCompletionStatus, type DevelopmentCompletionStatus } from './completionStatus'
 
 export type ParsedClaudeReport = {
   executiveSummary: string
@@ -159,7 +162,7 @@ export function parseClaudeReport(rawText: string): ParsedClaudeReport {
   }
 }
 
-export type DevelopmentCompletionStatus = 'Development Complete' | 'Further Work Required'
+export type { DevelopmentCompletionStatus }
 
 export type CompletionInput = {
   claudeModel: string
@@ -172,23 +175,6 @@ export type DevelopmentCompletionResult = {
   status: DevelopmentCompletionStatus
   reasons: string[]
   nextPrompt: GeneratedPrompt | null
-}
-
-/**
- * Failing build/TypeScript/runtime, or an explicit next-batch suggestion in
- * the report, are the only signals treated as "further work required" —
- * the same build/typescript-first severity ordering already used by
- * computeDevelopmentReadiness and deriveExecutiveDecision. Risks or
- * recommendations being present doesn't by itself reopen a batch that
- * otherwise validated clean.
- */
-function determineCompletionStatus(parsed: ParsedClaudeReport): { status: DevelopmentCompletionStatus; reasons: string[] } {
-  const reasons: string[] = []
-  if (parsed.buildStatus === 'Failing') reasons.push('Build is failing.')
-  if (parsed.typescriptStatus === 'Failing') reasons.push('TypeScript is failing.')
-  if (parsed.runtimeStatus === 'Failing') reasons.push('Runtime status reported as failing.')
-  if (parsed.nextSuggestedBatch !== '') reasons.push(`A next batch was suggested: ${parsed.nextSuggestedBatch}`)
-  return { status: reasons.length > 0 ? 'Further Work Required' : 'Development Complete', reasons }
 }
 
 /**
@@ -276,9 +262,11 @@ export function completeDevelopmentCycle(
     const projectIntelAfter = getProjectIntelligence(slug, context)
     const devIntelAfter = getDevelopmentIntelligence(slug, projectIntelAfter)
     const sessionAfter = getDevelopmentSession(slug, context, projectIntelAfter, devIntelAfter)
+    const planAfter = getDevelopmentPlan(slug, context, projectIntelAfter, devIntelAfter, sessionAfter)
     const dependenciesAfter = developmentDependencyStatusForProject(slug, context)
     const eventsAfter = developmentEventsForProject(slug, { git: context.git, build: context.build, deployment: context.deployment })
-    nextPrompt = getGeneratedPrompt(slug, sessionAfter, dependenciesAfter, eventsAfter)
+    const memoryAfter = getDevelopmentConversationMemory(slug, sessionAfter, planAfter, dependenciesAfter, eventsAfter)
+    nextPrompt = getGeneratedPrompt(slug, sessionAfter, dependenciesAfter, eventsAfter, memoryAfter)
   }
 
   return { parsed, handover, status, reasons, nextPrompt }

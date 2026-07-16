@@ -13,6 +13,8 @@ import {
   type DevelopmentEvent,
 } from '@/lib/dev/developmentEventEngine'
 import { developmentDependencyStatusForProject, type DevelopmentDependencyStatus } from '@/lib/dev/developmentDependencyEngine'
+import { getDevelopmentConversationMemory } from '@/lib/dev/developmentConversationMemoryEngine'
+import { getExecutiveActions } from '@/lib/dev/executiveActionEngine'
 import { getGeneratedPrompt } from '@/lib/dev/promptIntelligenceEngine'
 import { PRIORITY_LABEL } from '@/lib/dev/queueStorage'
 import type { GitIntelligence } from '@/lib/dev/gitIntelligence'
@@ -20,6 +22,8 @@ import type { DeploymentIntelligence } from '@/lib/dev/deploymentIntelligence'
 import type { BuildIntelligence } from '@/lib/dev/buildIntelligence'
 import { DevBadge, DevCard, DevCardHeader, DevField, DevSectionLabel, DevSkeleton, devReadinessTone, devValidationTone } from './ui'
 import { PromptGenerator } from './PromptGenerator'
+import { MissionControl } from './MissionControl'
+import { ExecutiveActionQueuePanel } from './ExecutiveActionQueuePanel'
 
 /**
  * The Executive Command Centre — VYRON DEV's primary operational screen.
@@ -74,10 +78,16 @@ export function ExecutiveCommandCentre({
 
   const significantChanges = getSignificantChanges(events)
   const alerts = getExecutiveAlerts(events)
-  const generatedPrompt = getGeneratedPrompt(slug, session, dependencies, events)
+  const memory = getDevelopmentConversationMemory(slug, session, plan, dependencies, events)
+  const generatedPrompt = getGeneratedPrompt(slug, session, dependencies, events, memory)
+  const actionQueue = getExecutiveActions(session, plan, dependencies, events, memory)
 
   return (
-    <DevCard>
+    <div>
+      <MissionControl session={session} queue={actionQueue} generatedPrompt={generatedPrompt} />
+
+      <div className="mt-4">
+      <DevCard>
       <DevCardHeader
         title="Executive Command Centre"
         badge={<DevBadge tone={devReadinessTone(session.developmentReadiness)}>{session.developmentReadiness}</DevBadge>}
@@ -308,7 +318,7 @@ export function ExecutiveCommandCentre({
         </div>
       </div>
 
-      <div className="mt-4 border-t border-[var(--dev-border)] pt-4">
+      <div id="ecc-dependencies" className="mt-4 scroll-mt-24 border-t border-[var(--dev-border)] pt-4">
         <DevSectionLabel>Dependencies</DevSectionLabel>
         <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <DevField label="Critical Path">
@@ -354,8 +364,71 @@ export function ExecutiveCommandCentre({
       </div>
 
       <div className="mt-4 border-t border-[var(--dev-border)] pt-4">
+        <DevSectionLabel>Development Memory</DevSectionLabel>
+        <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <DevField label="Previous Objective">
+            <p className="text-sm text-[var(--dev-text)]">{memory.previousObjective ?? 'Unknown'}</p>
+          </DevField>
+          <DevField label="Completion Status">
+            <DevBadge tone={memory.completionStatus === 'Completed' ? 'success' : memory.completionStatus === 'Unknown' ? 'neutral' : 'warning'}>
+              {memory.completionStatus}
+            </DevBadge>
+          </DevField>
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <DevField label="Development Drift">
+            <DevBadge tone={memory.drift === 'No Drift' ? 'success' : memory.drift === 'Minor Drift' ? 'warning' : 'danger'}>
+              {memory.drift}
+            </DevBadge>
+            <p className="mt-1 text-xs text-[var(--dev-text-faint)]">{memory.driftExplanation}</p>
+          </DevField>
+          <DevField label="Development Momentum">
+            <DevBadge
+              tone={
+                memory.momentum === 'Accelerating'
+                  ? 'success'
+                  : memory.momentum === 'Steady'
+                    ? 'info'
+                    : memory.momentum === 'Slowing'
+                      ? 'warning'
+                      : 'danger'
+              }
+            >
+              {memory.momentum}
+            </DevBadge>
+          </DevField>
+        </div>
+        <div className="mt-3">
+          <DevField label="Executive Continuity Summary">
+            <p className="text-sm leading-relaxed text-[var(--dev-text-muted)]">{memory.continuitySummary}</p>
+          </DevField>
+        </div>
+        <div className="mt-3">
+          <DevField label="Remaining Work">
+            {memory.remainingWork.length > 0 ? (
+              <ul className="space-y-1">
+                {memory.remainingWork.slice(0, 5).map((item, i) => (
+                  <li key={i} className="truncate text-sm text-[var(--dev-text)]">
+                    <Link href={item.href} className="hover:text-[var(--dev-accent)]">
+                      {item.source}: {item.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span className="text-sm text-[var(--dev-text-faint)]">Nothing outstanding.</span>
+            )}
+          </DevField>
+        </div>
+      </div>
+
+      <ExecutiveActionQueuePanel actions={actionQueue.actions} />
+
+      <div className="mt-4 border-t border-[var(--dev-border)] pt-4">
         <PromptGenerator prompt={generatedPrompt} heading="Claude Instruction" />
       </div>
-    </DevCard>
+      </DevCard>
+      </div>
+    </div>
   )
 }
