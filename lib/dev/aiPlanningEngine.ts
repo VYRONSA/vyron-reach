@@ -3,8 +3,8 @@ import { PRIORITY_LABEL } from './queueStorage'
 import type { Risk } from './risksStorage'
 import type { TechnicalDebt } from './technicalDebtStorage'
 import { batchesForMilestone } from './batchesStorage'
-import { getProjectIntelligence, type ProjectIntelligenceContext } from './projectIntelligence'
-import { getDevelopmentIntelligence } from './developmentIntelligence'
+import { getProjectIntelligence, type ProjectIntelligence, type ProjectIntelligenceContext } from './projectIntelligence'
+import { getDevelopmentIntelligence, type DevelopmentIntelligence } from './developmentIntelligence'
 import { getDevelopmentSession, type DevelopmentSession } from './developmentOrchestrator'
 
 export type PriorityTier = 'Critical' | 'High' | 'Medium' | 'Low'
@@ -346,11 +346,21 @@ function buildSuggestedClaudePrompt(session: DevelopmentSession): string {
  * deterministic, stateless, synchronous — no AI, no Claude calls, no
  * dynamic generation. Every field is template-assembled from data the
  * Project/Development/Handover intelligence engines already produced.
+ *
+ * Pass already-computed `projectIntel`/`devIntel`/`session` when the
+ * caller has them (the Self Development Engine does), so this never
+ * recomputes any of the three.
  */
-export function getDevelopmentPlan(slug: string, context: ProjectIntelligenceContext = {}): DevelopmentPlan {
-  const projectIntel = getProjectIntelligence(slug, context)
-  const devIntel = getDevelopmentIntelligence(slug, projectIntel)
-  const session = getDevelopmentSession(slug, context, projectIntel, devIntel)
+export function getDevelopmentPlan(
+  slug: string,
+  context: ProjectIntelligenceContext = {},
+  precomputedProjectIntel?: ProjectIntelligence,
+  precomputedDevIntel?: DevelopmentIntelligence,
+  precomputedSession?: DevelopmentSession
+): DevelopmentPlan {
+  const projectIntel = precomputedProjectIntel ?? getProjectIntelligence(slug, context)
+  const devIntel = precomputedDevIntel ?? getDevelopmentIntelligence(slug, projectIntel)
+  const session = precomputedSession ?? getDevelopmentSession(slug, context, projectIntel, devIntel)
 
   return {
     currentGoal: buildCurrentGoal(session),

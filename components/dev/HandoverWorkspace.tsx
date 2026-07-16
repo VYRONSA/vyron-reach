@@ -8,9 +8,10 @@ import { deleteHandover, getHandovers, type Handover } from '@/lib/dev/handoverS
 import { DevBadge, DevButton, DevEmptyState, DevInput, DevSelect, devValidationTone } from './ui'
 import { HandoverForm } from './HandoverForm'
 import { HandoverViewer } from './HandoverViewer'
+import { ClaudeReportProcessor } from './ClaudeReportProcessor'
 import { useQueryParam } from './useQueryParam'
 
-type Mode = 'list' | 'create' | 'edit' | 'view'
+type Mode = 'list' | 'create' | 'edit' | 'view' | 'process'
 
 export function HandoverWorkspace() {
   const [handovers, setHandovers] = useState<Handover[]>([])
@@ -76,6 +77,10 @@ export function HandoverWorkspace() {
     setActiveId(null)
     setMode('create')
   }
+  const startProcess = () => {
+    setActiveId(null)
+    setMode('process')
+  }
   const openView = (h: Handover) => {
     setActiveId(h.id)
     setMode('view')
@@ -99,6 +104,9 @@ export function HandoverWorkspace() {
 
   if (!hydrated) return <div className="text-sm text-[var(--dev-text-faint)]">Loading handovers...</div>
 
+  if (mode === 'process') {
+    return <ClaudeReportProcessor onDone={handleDone} onCancel={backToList} />
+  }
   if (mode === 'create') {
     return <HandoverForm onDone={handleDone} onCancel={backToList} />
   }
@@ -162,7 +170,12 @@ export function HandoverWorkspace() {
             ))}
           </DevSelect>
         </div>
-        <DevButton onClick={startCreate}>New handover</DevButton>
+        <div className="flex items-center gap-2">
+          <DevButton variant="secondary" onClick={startProcess}>
+            Process Claude Report
+          </DevButton>
+          <DevButton onClick={startCreate}>New handover</DevButton>
+        </div>
       </div>
 
       {visible.length === 0 ? (

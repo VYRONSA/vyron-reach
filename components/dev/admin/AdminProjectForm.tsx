@@ -32,7 +32,6 @@ type FormState = {
   description: string
   category: string
   status: ProjectStatus
-  phase: string
   progress: number
   color: string
   icon: string
@@ -45,7 +44,6 @@ function fromProject(project: Project): FormState {
     description: project.description,
     category: project.category,
     status: project.status,
-    phase: project.phase,
     progress: project.progress,
     color: project.color,
     icon: project.icon,
@@ -58,7 +56,6 @@ const emptyForm: FormState = {
   description: '',
   category: '',
   status: 'planning',
-  phase: '',
   progress: 0,
   color: '',
   icon: '',
@@ -104,7 +101,6 @@ export function AdminProjectForm({ project }: { project?: Project }) {
         description: form.description,
         category: form.category,
         status: form.status,
-        phase: form.phase,
         progress: form.progress,
         color: form.color,
         icon: form.icon,
@@ -125,7 +121,6 @@ export function AdminProjectForm({ project }: { project?: Project }) {
       description: form.description,
       category: form.category,
       status: form.status,
-      phase: form.phase,
       progress: form.progress,
       color: form.color,
       icon: form.icon,
@@ -157,7 +152,7 @@ export function AdminProjectForm({ project }: { project?: Project }) {
         <DevTextarea rows={3} value={form.description} onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))} />
       </Field>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Field label="Product Category">
           <DevInput value={form.category} onChange={e => setForm(prev => ({ ...prev, category: e.target.value }))} />
         </Field>
@@ -170,12 +165,6 @@ export function AdminProjectForm({ project }: { project?: Project }) {
             ))}
           </DevSelect>
         </Field>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Current Phase">
-          <DevInput value={form.phase} onChange={e => setForm(prev => ({ ...prev, phase: e.target.value }))} />
-        </Field>
         <Field label="Progress (%)">
           <DevInput
             type="number"
@@ -186,6 +175,10 @@ export function AdminProjectForm({ project }: { project?: Project }) {
           />
         </Field>
       </div>
+      <p className="text-xs text-[var(--dev-text-faint)]">
+        Current Phase and Current Milestone are no longer set here — both are derived automatically from the project&apos;s
+        milestones.
+      </p>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Colour (optional)">

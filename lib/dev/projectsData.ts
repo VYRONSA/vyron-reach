@@ -9,8 +9,16 @@ export type Project = {
   description: string
   category: string
   status: ProjectStatus
-  phase: string
-  milestone: string
+  /**
+   * Starting progress for a brand-new project with no milestones yet —
+   * once milestones exist, Project Intelligence derives progress from
+   * them instead (getMilestoneProgress) and this becomes a fallback
+   * only. Current Phase and Current Milestone are NOT stored here:
+   * they're derived entirely from the project's milestones (see
+   * getProjectIntelligence), which is now the single source of truth
+   * for both — a manually re-typed "phase" string can't drift out of
+   * sync with reality the way a derived one can't.
+   */
   progress: number
   color: string
   icon: string
@@ -18,6 +26,8 @@ export type Project = {
   lastUpdated: string
   notes: string
   recentActivity: { label: string; time: string }[]
+  /** '' for the original seed products (their real creation predates this field) — the Development Event Engine only emits a "Project Created" event when this is genuinely known, rather than guessing. */
+  createdAt: string
 }
 
 /**
@@ -28,6 +38,23 @@ export type Project = {
  */
 const SEED_PROJECTS: Project[] = [
   {
+    slug: 'vyron-dev',
+    name: 'VYRON DEV',
+    tagline: 'AI-native development operating system',
+    description:
+      'The internal Development Operating System for VYRONSOFT — Project/Development/Git/Deployment/Build Intelligence Engines, the Executive Command Centre, and Owner Administration. Phase 3 tracks its own development through the same engines it built for every other product.',
+    category: 'Platform',
+    status: 'active',
+    progress: 0,
+    color: '',
+    icon: '',
+    archived: false,
+    createdAt: '',
+    lastUpdated: 'Today',
+    notes: 'Self Development — VYRON DEV now understands its own state through the Self Development Engine (lib/dev/selfDevelopmentEngine.ts).',
+    recentActivity: [],
+  },
+  {
     slug: 'reach',
     name: 'VYRON REACH',
     tagline: 'Internal marketing operating system',
@@ -35,12 +62,11 @@ const SEED_PROJECTS: Project[] = [
       'A single-org marketing command centre for VYRONSOFT — campaigns, creatives, leads, SEO, and reporting driven by one canonical navigation and data provider.',
     category: 'Marketing',
     status: 'active',
-    phase: 'Phase A — Consolidation',
-    milestone: 'Dead-code removal complete, Phase B (multi-tenant purge) pending review',
     progress: 40,
     color: '',
     icon: '',
     archived: false,
+    createdAt: '',
     lastUpdated: 'Today',
     notes:
       'Architecture audit complete. 2,421 files removed in Phase A. VYRON DEV portal (this tool) built on top of the surviving canonical core.',
@@ -58,12 +84,11 @@ const SEED_PROJECTS: Project[] = [
     description: 'Shared authentication, data, and infrastructure services for the VYRON product suite.',
     category: 'Platform',
     status: 'planning',
-    phase: 'Not started',
-    milestone: 'No milestones defined yet',
     progress: 0,
     color: '',
     icon: '',
     archived: false,
+    createdAt: '',
     lastUpdated: '—',
     notes: 'No work has started on this project.',
     recentActivity: [],
@@ -75,12 +100,11 @@ const SEED_PROJECTS: Project[] = [
     description: 'Internal cost tracking and reporting across VYRONSOFT projects and infrastructure.',
     category: 'Finance',
     status: 'planning',
-    phase: 'Not started',
-    milestone: 'No milestones defined yet',
     progress: 0,
     color: '',
     icon: '',
     archived: false,
+    createdAt: '',
     lastUpdated: '—',
     notes: 'No work has started on this project.',
     recentActivity: [],
@@ -92,12 +116,11 @@ const SEED_PROJECTS: Project[] = [
     description: 'Payments and billing infrastructure for VYRON products.',
     category: 'Finance',
     status: 'planning',
-    phase: 'Not started',
-    milestone: 'No milestones defined yet',
     progress: 0,
     color: '',
     icon: '',
     archived: false,
+    createdAt: '',
     lastUpdated: '—',
     notes: 'No work has started on this project.',
     recentActivity: [],
@@ -109,12 +132,11 @@ const SEED_PROJECTS: Project[] = [
     description: 'Resource and asset management tooling.',
     category: 'Operations',
     status: 'planning',
-    phase: 'Not started',
-    milestone: 'No milestones defined yet',
     progress: 0,
     color: '',
     icon: '',
     archived: false,
+    createdAt: '',
     lastUpdated: '—',
     notes: 'No work has started on this project.',
     recentActivity: [],
@@ -126,12 +148,11 @@ const SEED_PROJECTS: Project[] = [
     description: 'Independent product tracked separately from the core VYRON platform suite.',
     category: 'Independent',
     status: 'paused',
-    phase: 'On hold',
-    milestone: 'On hold — no active milestone',
     progress: 15,
     color: '',
     icon: '',
     archived: false,
+    createdAt: '',
     lastUpdated: '—',
     notes: 'On hold. No active development.',
     recentActivity: [],
@@ -143,12 +164,11 @@ const SEED_PROJECTS: Project[] = [
     description: 'Independent product tracked separately from the core VYRON platform suite.',
     category: 'Independent',
     status: 'paused',
-    phase: 'On hold',
-    milestone: 'On hold — no active milestone',
     progress: 10,
     color: '',
     icon: '',
     archived: false,
+    createdAt: '',
     lastUpdated: '—',
     notes: 'On hold. No active development.',
     recentActivity: [],
@@ -160,8 +180,8 @@ export const SEED_PROJECT_SLUGS: string[] = SEED_PROJECTS.map(p => p.slug)
 
 const KEY = 'vyron-dev-projects-v1'
 
-type StoredProject = Omit<Project, 'category' | 'color' | 'icon' | 'archived'> &
-  Partial<Pick<Project, 'category' | 'color' | 'icon' | 'archived'>>
+type StoredProject = Omit<Project, 'category' | 'color' | 'icon' | 'archived' | 'createdAt'> &
+  Partial<Pick<Project, 'category' | 'color' | 'icon' | 'archived' | 'createdAt'>>
 
 function normalize(p: StoredProject): Project {
   return {
@@ -170,6 +190,7 @@ function normalize(p: StoredProject): Project {
     color: p.color ?? '',
     icon: p.icon ?? '',
     archived: p.archived ?? false,
+    createdAt: p.createdAt ?? '',
   }
 }
 
@@ -232,7 +253,6 @@ export type ProjectInput = {
   description: string
   category: string
   status: ProjectStatus
-  phase: string
   progress: number
   color: string
   icon: string
@@ -247,12 +267,11 @@ export function createProject(input: ProjectInput): Project {
     description: input.description,
     category: input.category,
     status: input.status,
-    phase: input.phase,
-    milestone: 'No milestones defined yet',
     progress: input.progress,
     color: input.color,
     icon: input.icon,
     archived: false,
+    createdAt: now,
     lastUpdated: now,
     notes: '',
     recentActivity: [],

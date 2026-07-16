@@ -11,12 +11,20 @@ import {
   STATUS_TONE,
   type Project,
 } from '@/lib/dev/projectsData'
+import { getProjectIntelligence } from '@/lib/dev/projectIntelligence'
 import { DevBadge, DevButton, DevEmptyState, DevSkeleton } from '../ui'
 
 export function AdminProjectsTable() {
   const [projects, setProjects] = useState<Project[] | null>(null)
+  const [phases, setPhases] = useState<Record<string, string>>({})
 
-  const refresh = () => setProjects(getProjects())
+  const refresh = () => {
+    const list = getProjects()
+    setProjects(list)
+    const nextPhases: Record<string, string> = {}
+    for (const p of list) nextPhases[p.slug] = getProjectIntelligence(p.slug).currentPhase
+    setPhases(nextPhases)
+  }
 
   useEffect(() => {
     refresh()
@@ -53,7 +61,7 @@ export function AdminProjectsTable() {
                 {project.archived ? <DevBadge tone="neutral">Archived</DevBadge> : null}
               </div>
               <div className="mt-0.5 truncate text-xs text-[var(--dev-text-faint)]">
-                {project.category || 'Uncategorised'} · {project.phase || 'No phase set'}
+                {project.category || 'Uncategorised'} · {phases[project.slug] || 'Unknown'}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">

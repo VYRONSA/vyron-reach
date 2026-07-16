@@ -91,7 +91,7 @@ export function getProjectIntelligence(slug: string, context: ProjectIntelligenc
     currentMilestone,
     currentBatch,
     currentTask,
-    currentPhase: project?.phase ?? 'Unknown',
+    currentPhase: currentMilestone?.phase || 'Unknown',
     progress: getMilestoneProgress(slug) ?? project?.progress ?? 0,
     productionReadiness: computeProductionReadiness(buildStatus, typescriptStatus, health),
     nextRecommendedTask: pickNextRecommendedTask(openTasks, currentTask),

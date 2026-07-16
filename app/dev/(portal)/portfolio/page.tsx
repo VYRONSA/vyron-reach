@@ -28,7 +28,7 @@ function computeStats(project: Project): PortfolioStats {
 
   return {
     progress: intel.progress,
-    milestoneLabel: intel.currentMilestone?.title ?? project.milestone,
+    milestoneLabel: intel.currentMilestone?.title ?? 'No milestone set',
     batchLabel: intel.currentBatch ? `Batch ${intel.currentBatch.batchNumber}` : 'No active batch',
     openTasks: openTasks.length,
     openRisks: intel.openRisks.length,
@@ -108,7 +108,7 @@ export default function DevPortfolioPage() {
                   </div>
                   <div className="mt-1.5 flex items-center justify-between text-[11px] text-[var(--dev-text-faint)]">
                     <span className="font-mono">{hydrated ? s.progress : project.progress}% complete</span>
-                    <span className="truncate pl-2">{hydrated ? s.milestoneLabel : project.milestone}</span>
+                    <span className="truncate pl-2">{hydrated ? s.milestoneLabel : '—'}</span>
                   </div>
                 </div>
 

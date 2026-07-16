@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { getProjects, STATUS_LABEL, STATUS_TONE, type Project } from '@/lib/dev/projectsData'
+import { getProjectIntelligence } from '@/lib/dev/projectIntelligence'
 import { getTasks } from '@/lib/dev/queueStorage'
 import { useDevPreferences } from '@/context/dev/DevPreferencesContext'
 import { DevBadge, DevPageHeader, DevSkeleton } from '@/components/dev/ui'
@@ -10,10 +11,15 @@ import { DevBadge, DevPageHeader, DevSkeleton } from '@/components/dev/ui'
 export default function DevProjectsPage() {
   const { preferences, hydrated } = useDevPreferences()
   const [projects, setProjects] = useState<Project[] | null>(null)
+  const [phases, setPhases] = useState<Record<string, string>>({})
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({})
 
   useEffect(() => {
-    setProjects(getProjects().filter(p => !p.archived))
+    const list = getProjects().filter(p => !p.archived)
+    setProjects(list)
+    const nextPhases: Record<string, string> = {}
+    for (const p of list) nextPhases[p.slug] = getProjectIntelligence(p.slug).currentPhase
+    setPhases(nextPhases)
     const tasks = getTasks()
     const counts: Record<string, number> = {}
     for (const task of tasks) {
@@ -61,7 +67,7 @@ export default function DevProjectsPage() {
               <DevBadge tone={STATUS_TONE[project.status]}>{STATUS_LABEL[project.status]}</DevBadge>
             </div>
 
-            <div className="mt-4 text-xs text-[var(--dev-text-muted)]">{project.phase}</div>
+            <div className="mt-4 text-xs text-[var(--dev-text-muted)]">{phases[project.slug] ?? 'Unknown'}</div>
 
             <div className="mt-2">
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--dev-surface-hover)]">

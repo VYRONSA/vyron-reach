@@ -3,22 +3,30 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useDevPreferences } from '@/context/dev/DevPreferencesContext'
-import { getDevelopmentSession, type DevelopmentSession } from '@/lib/dev/developmentOrchestrator'
-import { getDevelopmentPlan, type DevelopmentPlan } from '@/lib/dev/aiPlanningEngine'
+import type { DevelopmentSession } from '@/lib/dev/developmentOrchestrator'
+import type { DevelopmentPlan } from '@/lib/dev/aiPlanningEngine'
+import { getSelfDevelopmentStatus } from '@/lib/dev/selfDevelopmentEngine'
+import {
+  developmentEventsForProject,
+  getExecutiveAlerts,
+  getSignificantChanges,
+  type DevelopmentEvent,
+} from '@/lib/dev/developmentEventEngine'
+import { developmentDependencyStatusForProject, type DevelopmentDependencyStatus } from '@/lib/dev/developmentDependencyEngine'
+import { getGeneratedPrompt } from '@/lib/dev/promptIntelligenceEngine'
 import { PRIORITY_LABEL } from '@/lib/dev/queueStorage'
 import type { GitIntelligence } from '@/lib/dev/gitIntelligence'
 import type { DeploymentIntelligence } from '@/lib/dev/deploymentIntelligence'
 import type { BuildIntelligence } from '@/lib/dev/buildIntelligence'
 import { DevBadge, DevCard, DevCardHeader, DevField, DevSectionLabel, DevSkeleton, devReadinessTone, devValidationTone } from './ui'
+import { PromptGenerator } from './PromptGenerator'
 
 /**
  * The Executive Command Centre — VYRON DEV's primary operational screen.
- * This is composition only: every value shown here already exists on
- * the Development Session (lib/dev/developmentOrchestrator.ts) or the
- * Development Plan (lib/dev/aiPlanningEngine.ts), which themselves
- * already compose Project/Development/Git/Deployment/Build Intelligence.
- * Nothing is recalculated here — this component just lays the existing
- * engines' output out for a single executive glance.
+ * Completely driven by the Self Development Engine (lib/dev/
+ * selfDevelopmentEngine.ts): one call returns the Session and Plan this
+ * component renders, so nothing here is recalculated and nothing here
+ * fetches Session/Plan independently anymore.
  */
 export function ExecutiveCommandCentre({
   projectSlug,
@@ -39,14 +47,19 @@ export function ExecutiveCommandCentre({
   const slug = projectSlug ?? preferences.defaultProject
   const [session, setSession] = useState<DevelopmentSession | null>(null)
   const [plan, setPlan] = useState<DevelopmentPlan | null>(null)
+  const [events, setEvents] = useState<DevelopmentEvent[]>([])
+  const [dependencies, setDependencies] = useState<DevelopmentDependencyStatus | null>(null)
 
   useEffect(() => {
     const context = { buildStatus, typescriptStatus, git, deployment, build }
-    setSession(getDevelopmentSession(slug, context))
-    setPlan(getDevelopmentPlan(slug, context))
+    const status = getSelfDevelopmentStatus(slug, context)
+    setSession(status.session)
+    setPlan(status.plan)
+    setEvents(developmentEventsForProject(slug, { git, build, deployment }))
+    setDependencies(developmentDependencyStatusForProject(slug, context))
   }, [slug, buildStatus, typescriptStatus, git, deployment, build])
 
-  const ready = session !== null && plan !== null && (Boolean(projectSlug) || prefsHydrated)
+  const ready = session !== null && plan !== null && dependencies !== null && (Boolean(projectSlug) || prefsHydrated)
 
   if (!ready) {
     return (
@@ -58,6 +71,10 @@ export function ExecutiveCommandCentre({
       </DevCard>
     )
   }
+
+  const significantChanges = getSignificantChanges(events)
+  const alerts = getExecutiveAlerts(events)
+  const generatedPrompt = getGeneratedPrompt(slug, session, dependencies, events)
 
   return (
     <DevCard>
@@ -246,6 +263,98 @@ export function ExecutiveCommandCentre({
             )}
           </DevField>
         </div>
+      </div>
+
+      <div className="mt-4 border-t border-[var(--dev-border)] pt-4">
+        <DevSectionLabel>Development Events</DevSectionLabel>
+        <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <DevField label="Latest Development Events">
+            {events.length > 0 ? (
+              <ul className="space-y-1">
+                {events.slice(0, 5).map((e, i) => (
+                  <li key={i} className="truncate text-sm text-[var(--dev-text)]">
+                    <Link href={e.href} className="hover:text-[var(--dev-accent)]">
+                      {e.type}: {e.description}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span className="text-sm text-[var(--dev-text-faint)]">No events recorded yet.</span>
+            )}
+          </DevField>
+          <DevField label="Significant Changes">
+            <span className={`font-mono text-sm ${significantChanges.length > 0 ? 'text-amber-500 dark:text-amber-400' : 'text-[var(--dev-text)]'}`}>
+              {significantChanges.length}
+            </span>
+          </DevField>
+        </div>
+        <div className="mt-3">
+          <DevField label="Executive Alerts">
+            {alerts.length > 0 ? (
+              <ul className="space-y-1">
+                {alerts.map((a, i) => (
+                  <li key={i} className="text-sm text-rose-500 dark:text-rose-400">
+                    <Link href={a.href} className="hover:underline">
+                      {a.description}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span className="text-sm text-[var(--dev-text)]">No active alerts.</span>
+            )}
+          </DevField>
+        </div>
+      </div>
+
+      <div className="mt-4 border-t border-[var(--dev-border)] pt-4">
+        <DevSectionLabel>Dependencies</DevSectionLabel>
+        <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <DevField label="Critical Path">
+            <p className="text-sm text-[var(--dev-text)]">
+              {dependencies.criticalPathProject?.reason ?? 'No project is currently the critical path.'}
+            </p>
+          </DevField>
+          <DevField label="Recommended Next Executable Task">
+            {dependencies.recommendedNextExecutableTask ? (
+              <Link
+                href={dependencies.recommendedNextExecutableTask.href}
+                className="text-sm text-[var(--dev-text)] hover:text-[var(--dev-accent)]"
+              >
+                {dependencies.recommendedNextExecutableTask.label}
+              </Link>
+            ) : (
+              <span className="text-sm text-[var(--dev-text-faint)]">Nothing executable right now.</span>
+            )}
+          </DevField>
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-3">
+          <DevField label="Current Blockers">
+            <span className={`font-mono text-sm ${dependencies.blockers.length > 0 ? 'text-rose-500 dark:text-rose-400' : 'text-[var(--dev-text)]'}`}>
+              {dependencies.blockers.length}
+            </span>
+          </DevField>
+          <DevField label="Ready Work">
+            <span className="font-mono text-sm text-[var(--dev-text)]">{dependencies.readyWork.length}</span>
+          </DevField>
+          <DevField label="Waiting Work">
+            <span className="font-mono text-sm text-[var(--dev-text)]">{dependencies.waitingWork.length}</span>
+          </DevField>
+        </div>
+        <div className="mt-3">
+          <DevField label="Dependency Graph Summary">
+            <p className="text-sm text-[var(--dev-text-muted)]">
+              {dependencies.readyWork.length} batch{dependencies.readyWork.length === 1 ? '' : 'es'} ready &middot;{' '}
+              {dependencies.waitingWork.length} waiting &middot; {dependencies.blockers.length} blocker
+              {dependencies.blockers.length === 1 ? '' : 's'} for this project.
+            </p>
+          </DevField>
+        </div>
+      </div>
+
+      <div className="mt-4 border-t border-[var(--dev-border)] pt-4">
+        <PromptGenerator prompt={generatedPrompt} heading="Claude Instruction" />
       </div>
     </DevCard>
   )
