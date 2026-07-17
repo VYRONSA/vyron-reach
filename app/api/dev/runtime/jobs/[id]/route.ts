@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { isRuntimeAccessible } from '@/lib/dev/runtime/runtimeAccess'
+import { isRuntimeAccessible, runtimeUnavailableResponse } from '@/lib/dev/runtime/runtimeAccess'
 import { cancelDevelopmentJob, getDevelopmentJob, markJobApplied, markJobApproved } from '@/lib/dev/runtime/runtimeEngine'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  if (!isRuntimeAccessible(request)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!isRuntimeAccessible(request)) {
+    const { status, error } = runtimeUnavailableResponse(request)
+    return NextResponse.json({ error }, { status })
+  }
 
   const { id } = await params
   const job = getDevelopmentJob(id)
@@ -25,7 +28,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  * Completed/Failed without any client input.
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  if (!isRuntimeAccessible(request)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!isRuntimeAccessible(request)) {
+    const { status, error } = runtimeUnavailableResponse(request)
+    return NextResponse.json({ error }, { status })
+  }
 
   const { id } = await params
   const body = (await request.json().catch(() => null)) as { action?: string } | null
