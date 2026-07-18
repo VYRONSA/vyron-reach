@@ -160,6 +160,12 @@ export function HandoverForm({
       risksIdentified: form.risksIdentified.trim(),
       recommendations: form.recommendations.trim(),
       nextSuggestedBatch: form.nextSuggestedBatch.trim(),
+      // Manually-entered handovers never come from the Execution Runtime.
+      runtimeJobId: '',
+      runtimeDurationMs: null,
+      runtimeCostUsd: null,
+      claudeSessionId: null,
+      gitDiffSummary: '',
     }
 
     if (editing) {

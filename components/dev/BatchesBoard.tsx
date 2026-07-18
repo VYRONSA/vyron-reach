@@ -6,7 +6,7 @@ import { getProjects } from '@/lib/dev/projectsData'
 import { useDevPreferences } from '@/context/dev/DevPreferencesContext'
 import { getMilestones, type Milestone } from '@/lib/dev/milestonesStorage'
 import {
-  BATCH_STATUS_OPTIONS,
+  MANUALLY_SETTABLE_BATCH_STATUS_OPTIONS,
   createBatch,
   deleteBatch,
   getBatches,
@@ -201,16 +201,22 @@ export function BatchesBoard({ milestoneFilter, projectFilter }: { milestoneFilt
                 ))}
               </DevSelect>
             ) : null}
-            <DevSelect
-              value={form.status}
-              onChange={e => setForm(prev => ({ ...prev, status: e.target.value as BatchStatus }))}
-            >
-              {BATCH_STATUS_OPTIONS.map(opt => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </DevSelect>
+            {form.status === 'Complete' ? (
+              <DevSelect value={form.status} disabled title="Complete is only set automatically by the Execution Engine">
+                <option value="Complete">Complete</option>
+              </DevSelect>
+            ) : (
+              <DevSelect
+                value={form.status}
+                onChange={e => setForm(prev => ({ ...prev, status: e.target.value as BatchStatus }))}
+              >
+                {MANUALLY_SETTABLE_BATCH_STATUS_OPTIONS.map(opt => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </DevSelect>
+            )}
           </div>
           <DevTextarea
             value={form.objective}
@@ -284,13 +290,21 @@ export function BatchesBoard({ milestoneFilter, projectFilter }: { milestoneFilt
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={() => startEdit(b)}
-                    className="text-left text-sm font-medium text-[var(--dev-text)] hover:text-[var(--dev-accent)]"
-                  >
-                    Batch {b.batchNumber}
-                  </button>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Link
+                      href={`/dev/batches/${b.id}`}
+                      className="text-left text-sm font-medium text-[var(--dev-text)] hover:text-[var(--dev-accent)]"
+                    >
+                      Batch {b.batchNumber}
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => startEdit(b)}
+                      className="text-xs font-medium text-[var(--dev-text-faint)] hover:text-[var(--dev-text)]"
+                    >
+                      Edit
+                    </button>
+                  </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <button
                       type="button"

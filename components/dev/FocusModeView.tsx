@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { useDevPreferences } from '@/context/dev/DevPreferencesContext'
 import { getProjectBySlug } from '@/lib/dev/projectsData'
 import { getTasks, toggleTaskComplete, type Task } from '@/lib/dev/queueStorage'
-import { getCurrentMilestone, type Milestone } from '@/lib/dev/milestonesStorage'
+import { getCurrentMilestone, milestonesForProject, type Milestone } from '@/lib/dev/milestonesStorage'
 import { getCurrentBatchForProject, type Batch } from '@/lib/dev/batchesStorage'
 import { getPrompts, type Prompt } from '@/lib/dev/promptsStorage'
 import { WorkSessionTimer } from './WorkSessionTimer'
@@ -30,8 +30,11 @@ export function FocusModeView() {
   const [copied, setCopied] = useState(false)
 
   const refresh = () => {
-    setMilestone(slug ? getCurrentMilestone(slug) : null)
-    setBatch(slug ? getCurrentBatchForProject(slug) : null)
+    // Batch-first, same as projectIntelligence.ts: the current milestone is
+    // whichever milestone the current batch belongs to, not picked independently.
+    const currentBatch = slug ? getCurrentBatchForProject(slug) : null
+    setMilestone(currentBatch ? (milestonesForProject(slug).find(m => m.id === currentBatch.milestone) ?? null) : slug ? getCurrentMilestone(slug) : null)
+    setBatch(currentBatch)
     setTasks(getTasks().filter(t => (!slug || t.project === slug) && t.status !== 'done'))
     setPrompt(mostRelevantPrompt())
     setHydrated(true)

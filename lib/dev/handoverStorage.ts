@@ -32,14 +32,30 @@ export type Handover = {
   risksIdentified: string
   recommendations: string
   nextSuggestedBatch: string
+  /** Populated only when this handover came from the Execution Runtime (Phase 4 Batch 1) — '' / null for manually-entered handovers. */
+  runtimeJobId: string
+  runtimeDurationMs: number | null
+  runtimeCostUsd: number | null
+  claudeSessionId: string | null
+  gitDiffSummary: string
   createdAt: string
   updatedAt: string
 }
 
 const KEY = 'vyron-dev-handovers-v1'
 
+type StoredHandover = Omit<Handover, 'runtimeJobId' | 'runtimeDurationMs' | 'runtimeCostUsd' | 'claudeSessionId' | 'gitDiffSummary'> &
+  Partial<Pick<Handover, 'runtimeJobId' | 'runtimeDurationMs' | 'runtimeCostUsd' | 'claudeSessionId' | 'gitDiffSummary'>>
+
 export function getHandovers(): Handover[] {
-  return readLocal<Handover[]>(KEY, [])
+  return readLocal<StoredHandover[]>(KEY, []).map(h => ({
+    runtimeJobId: '',
+    runtimeDurationMs: null,
+    runtimeCostUsd: null,
+    claudeSessionId: null,
+    gitDiffSummary: '',
+    ...h,
+  }))
 }
 
 function saveHandovers(items: Handover[]) {

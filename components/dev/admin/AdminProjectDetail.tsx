@@ -7,6 +7,7 @@ import { DevEmptyState, DevSkeleton } from '../ui'
 import { AdminProjectForm } from './AdminProjectForm'
 import { AdminMilestoneSection } from './AdminMilestoneSection'
 import { AdminBatchSection } from './AdminBatchSection'
+import { EngineeringOrganizationPanel } from './EngineeringOrganizationPanel'
 
 /**
  * Owns the milestone list for this project and passes it down to both
@@ -51,6 +52,9 @@ export function AdminProjectDetail({ slug }: { slug: string }) {
   return (
     <div className="space-y-8">
       <AdminProjectForm project={project} />
+      <div className="border-t border-[var(--dev-border)] pt-6">
+        <EngineeringOrganizationPanel project={project} onChange={refreshMilestones} />
+      </div>
       <div className="border-t border-[var(--dev-border)] pt-6">
         <AdminMilestoneSection projectSlug={project.slug} milestones={milestones} onChange={refreshMilestones} />
       </div>

@@ -1,5 +1,5 @@
 import { getProjectBySlug, type Project } from './projectsData'
-import { getCurrentMilestone, getMilestoneProgress, type Milestone } from './milestonesStorage'
+import { getCurrentMilestone, getMilestoneProgress, milestonesForProject, type Milestone } from './milestonesStorage'
 import { getCurrentBatchForProject, type Batch } from './batchesStorage'
 import { tasksForProject, type Task } from './queueStorage'
 import { decisionsForProject, type Decision } from './decisionsStorage'
@@ -73,8 +73,16 @@ function computeProductionReadiness(buildStatus: string, typescriptStatus: strin
  */
 export function getProjectIntelligence(slug: string, context: ProjectIntelligenceContext = {}): ProjectIntelligence {
   const project = getProjectBySlug(slug)
-  const currentMilestone = getCurrentMilestone(slug)
+  /**
+   * Current position is batch-first: the current batch is the first
+   * incomplete batch in engineering sequence (getCurrentBatchForProject),
+   * and the current milestone is THAT batch's milestone — never picked
+   * independently. Only when no batch exists yet (a project with
+   * milestones but nothing queued under them) does milestone selection
+   * fall back to its own sequence-based status search.
+   */
   const currentBatch = getCurrentBatchForProject(slug)
+  const currentMilestone = currentBatch ? (milestonesForProject(slug).find(m => m.id === currentBatch.milestone) ?? null) : getCurrentMilestone(slug)
   const openTasks = tasksForProject(slug).filter(t => t.status !== 'done')
   const currentTask = openTasks.find(t => t.status === 'in-progress') ?? null
   const health = computeProjectHealth(slug)

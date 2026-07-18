@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { isRuntimeAccessible, runtimeUnavailableResponse } from '@/lib/dev/runtime/runtimeAccess'
-import { cancelDevelopmentJob, getDevelopmentJob, markJobApplied, markJobApproved } from '@/lib/dev/runtime/runtimeEngine'
+import {
+  cancelDevelopmentJob,
+  getDevelopmentJob,
+  markJobApplied,
+  markJobApproved,
+  rejectDevelopmentJob,
+} from '@/lib/dev/runtime/runtimeEngine'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
@@ -34,15 +40,20 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
 
   const { id } = await params
-  const body = (await request.json().catch(() => null)) as { action?: string } | null
+  const body = (await request.json().catch(() => null)) as { action?: string; reason?: string } | null
   const action = body?.action
 
-  let job = null
-  if (action === 'approve') job = markJobApproved(id)
-  else if (action === 'applied') job = markJobApplied(id)
-  else if (action === 'cancel') job = cancelDevelopmentJob(id)
-  else return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
+  try {
+    let job = null
+    if (action === 'approve') job = markJobApproved(id)
+    else if (action === 'applied') job = markJobApplied(id)
+    else if (action === 'cancel') job = cancelDevelopmentJob(id)
+    else if (action === 'reject') job = rejectDevelopmentJob(id, body?.reason)
+    else return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
 
-  if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
-  return NextResponse.json({ job })
+    if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
+    return NextResponse.json({ job })
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Invalid job transition' }, { status: 409 })
+  }
 }

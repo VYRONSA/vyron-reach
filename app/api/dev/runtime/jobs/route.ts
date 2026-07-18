@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
     batchId: body.batchId ?? '',
     objective: body.objective ?? '',
     prompt: body.prompt,
+    resumeSessionId: body.resumeSessionId,
   })
 
   return NextResponse.json({ job }, { status: 201 })

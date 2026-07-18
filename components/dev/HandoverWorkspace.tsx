@@ -119,6 +119,10 @@ export function HandoverWorkspace() {
 
   return (
     <div>
+      <div className="mb-4 rounded-lg border border-[var(--dev-border)] bg-[var(--dev-surface)] px-4 py-3 text-xs text-[var(--dev-text-faint)]">
+        Handovers are created automatically when a Batch is Approved (see a Batch&apos;s own page → Execute Batch). The manual
+        options below exist only as a fallback for when the runtime is unavailable, not as the normal workflow.
+      </div>
       <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex flex-1 flex-wrap gap-2">
           <DevInput
@@ -172,9 +176,11 @@ export function HandoverWorkspace() {
         </div>
         <div className="flex items-center gap-2">
           <DevButton variant="secondary" onClick={startProcess}>
-            Process Claude Report
+            Process Claude Report (fallback)
           </DevButton>
-          <DevButton onClick={startCreate}>New handover</DevButton>
+          <DevButton variant="secondary" onClick={startCreate}>
+            New handover (fallback)
+          </DevButton>
         </div>
       </div>
 

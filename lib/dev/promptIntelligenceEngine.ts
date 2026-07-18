@@ -17,6 +17,8 @@ export const PROMPT_EXPECTED_RETURN_FORMAT: string[] = [
   'Features Implemented',
   'Build Status',
   'TypeScript Status',
+  'Technical Debt Identified',
+  'Architecture Decisions',
   'Remaining Recommendations',
 ]
 

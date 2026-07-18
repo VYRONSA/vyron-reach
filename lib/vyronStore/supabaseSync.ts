@@ -103,9 +103,5 @@ export async function migrateBlobToNormalized(userId: string, store: VyronStore)
   await pushNormalizedOwnerStore(userId, store)
 }
 
-/** Current Supabase session user id, if any. */
-export async function getSupabaseUserId(): Promise<string | null> {
-  if (!isSupabaseConfigured) return null
-  const { data } = await supabase.auth.getSession()
-  return data.session?.user?.id ?? null
-}
+/** Re-exported from lib/supabase for existing call sites — the canonical definition now lives there since it's product-agnostic. */
+export { getSupabaseUserId } from '@/lib/supabase'

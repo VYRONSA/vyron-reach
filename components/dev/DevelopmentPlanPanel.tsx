@@ -228,11 +228,11 @@ export function DevelopmentPlanPanel({
         </DevField>
       </div>
 
-      <div className="mt-4 border-t border-[var(--dev-border)] pt-4">
-        <div className="flex items-center justify-between gap-2">
-          <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--dev-text-faint)]">
-            Suggested Claude Prompt
-          </div>
+      <details className="mt-4 border-t border-[var(--dev-border)] pt-4">
+        <summary className="cursor-pointer font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--dev-text-faint)]">
+          Advanced — Manual Prompt (fallback only; use Execute Batch on the Batches tab instead)
+        </summary>
+        <div className="mt-2 flex items-center justify-end">
           <DevButton variant="secondary" onClick={handleCopyPrompt}>
             {copied ? 'Copied' : 'Copy'}
           </DevButton>
@@ -240,7 +240,7 @@ export function DevelopmentPlanPanel({
         <pre className="mt-2 max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-black/20 p-3 font-mono text-[12px] leading-relaxed text-[var(--dev-text-muted)]">
           {plan.suggestedClaudePrompt}
         </pre>
-      </div>
+      </details>
     </DevCard>
   )
 }

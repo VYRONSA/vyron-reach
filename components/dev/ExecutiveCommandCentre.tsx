@@ -16,14 +16,17 @@ import { developmentDependencyStatusForProject, type DevelopmentDependencyStatus
 import { getDevelopmentConversationMemory } from '@/lib/dev/developmentConversationMemoryEngine'
 import { getExecutiveActions } from '@/lib/dev/executiveActionEngine'
 import { getGeneratedPrompt } from '@/lib/dev/promptIntelligenceEngine'
+import { getLatestHandover, type Handover } from '@/lib/dev/handoverStorage'
+import { isEngineeringReady } from '@/lib/dev/initializer/organizationInitializer'
 import { PRIORITY_LABEL } from '@/lib/dev/queueStorage'
 import type { GitIntelligence } from '@/lib/dev/gitIntelligence'
 import type { DeploymentIntelligence } from '@/lib/dev/deploymentIntelligence'
 import type { BuildIntelligence } from '@/lib/dev/buildIntelligence'
 import { DevBadge, DevCard, DevCardHeader, DevField, DevSectionLabel, DevSkeleton, devReadinessTone, devValidationTone } from './ui'
-import { PromptGenerator } from './PromptGenerator'
 import { MissionControl } from './MissionControl'
 import { ExecutiveActionQueuePanel } from './ExecutiveActionQueuePanel'
+import { EngineeringAssessmentPanel } from './EngineeringAssessmentPanel'
+import { PlanningCentrePanel } from './PlanningCentrePanel'
 
 /**
  * The Executive Command Centre — VYRON DEV's primary operational screen.
@@ -53,6 +56,8 @@ export function ExecutiveCommandCentre({
   const [plan, setPlan] = useState<DevelopmentPlan | null>(null)
   const [events, setEvents] = useState<DevelopmentEvent[]>([])
   const [dependencies, setDependencies] = useState<DevelopmentDependencyStatus | null>(null)
+  const [latestHandover, setLatestHandover] = useState<Handover | null>(null)
+  const [engineeringReady, setEngineeringReady] = useState(false)
   const [refreshToken, setRefreshToken] = useState(0)
 
   useEffect(() => {
@@ -62,6 +67,8 @@ export function ExecutiveCommandCentre({
     setPlan(status.plan)
     setEvents(developmentEventsForProject(slug, { git, build, deployment }))
     setDependencies(developmentDependencyStatusForProject(slug, context))
+    setLatestHandover(getLatestHandover(slug))
+    setEngineeringReady(isEngineeringReady(slug))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, buildStatus, typescriptStatus, git, deployment, build, refreshToken])
 
@@ -89,8 +96,13 @@ export function ExecutiveCommandCentre({
       <MissionControl
         slug={slug}
         session={session}
+        dependencies={dependencies}
+        memory={memory}
+        latestHandover={latestHandover}
         queue={actionQueue}
         generatedPrompt={generatedPrompt}
+        git={git}
+        deployment={deployment}
         onApplied={() => setRefreshToken(t => t + 1)}
       />
 
@@ -125,11 +137,14 @@ export function ExecutiveCommandCentre({
             <span className="text-sm text-[var(--dev-text)]">{session.currentMilestone?.title ?? 'None set'}</span>
           </DevField>
         </div>
-        <div className="mt-3">
+        <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <DevField label="Current Batch">
             <span className="text-sm text-[var(--dev-text)]">
               {session.currentBatch ? `Batch ${session.currentBatch.batchNumber}` : 'None active'}
             </span>
+          </DevField>
+          <DevField label="Engineering Organization">
+            <DevBadge tone={engineeringReady ? 'success' : 'neutral'}>{engineeringReady ? 'Ready' : 'Unknown'}</DevBadge>
           </DevField>
         </div>
       </div>
@@ -205,6 +220,51 @@ export function ExecutiveCommandCentre({
             <DevBadge tone={devValidationTone(session.typescriptStatus)}>{session.typescriptStatus}</DevBadge>
           </DevField>
         </div>
+
+        {latestHandover ? (
+          <div className="mt-4 border-t border-[var(--dev-border)] pt-4">
+            <DevSectionLabel>Last Execution Details</DevSectionLabel>
+            <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <DevField label="Objective Executed">
+                <p className="text-sm text-[var(--dev-text)]">{latestHandover.objective || 'Not recorded'}</p>
+              </DevField>
+              <DevField label="Next Development Task">
+                <p className="text-sm text-[var(--dev-text)]">{latestHandover.nextSuggestedBatch || 'None suggested'}</p>
+              </DevField>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <DevField label="Files Created">
+                <Link href={`/dev/handovers?focus=${latestHandover.id}`} className="font-mono text-sm text-[var(--dev-text)] hover:text-[var(--dev-accent)]">
+                  {latestHandover.filesCreated.length}
+                </Link>
+              </DevField>
+              <DevField label="Files Modified">
+                <Link href={`/dev/handovers?focus=${latestHandover.id}`} className="font-mono text-sm text-[var(--dev-text)] hover:text-[var(--dev-accent)]">
+                  {latestHandover.filesModified.length}
+                </Link>
+              </DevField>
+              <DevField label="Claude Duration">
+                <span className="text-sm text-[var(--dev-text)]">
+                  {latestHandover.runtimeDurationMs !== null ? `${Math.round(latestHandover.runtimeDurationMs / 1000)}s` : 'Unavailable'}
+                </span>
+              </DevField>
+              <DevField label="Claude Cost">
+                <span className="text-sm text-[var(--dev-text)]">
+                  {latestHandover.runtimeCostUsd !== null ? `$${latestHandover.runtimeCostUsd.toFixed(4)}` : 'Unavailable'}
+                </span>
+              </DevField>
+            </div>
+            {latestHandover.gitDiffSummary ? (
+              <div className="mt-3">
+                <DevField label="Git Diff Summary">
+                  <pre className="whitespace-pre-wrap rounded-lg bg-black/20 p-2.5 font-mono text-[11px] leading-relaxed text-[var(--dev-text-muted)]">
+                    {latestHandover.gitDiffSummary}
+                  </pre>
+                </DevField>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-4 border-t border-[var(--dev-border)] pt-4">
@@ -431,11 +491,24 @@ export function ExecutiveCommandCentre({
       </div>
 
       <ExecutiveActionQueuePanel actions={actionQueue.actions} />
-
-      <div className="mt-4 border-t border-[var(--dev-border)] pt-4">
-        <PromptGenerator prompt={generatedPrompt} heading="Claude Instruction" />
-      </div>
       </DevCard>
+      </div>
+
+      <div className="mt-4">
+        <EngineeringAssessmentPanel projectSlug={slug} git={git} build={build} />
+      </div>
+
+      <div className="mt-4">
+        <PlanningCentrePanel
+          projectSlug={slug}
+          session={session}
+          dependencies={dependencies}
+          memory={memory}
+          latestHandover={latestHandover}
+          queue={actionQueue}
+          git={git}
+          build={build}
+        />
       </div>
     </div>
   )

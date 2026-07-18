@@ -20,6 +20,8 @@ export type ParsedClaudeReport = {
   typescriptStatus: ValidationStatus
   runtimeStatus: ValidationStatus
   risksIdentified: string
+  technicalDebtIdentified: string
+  architectureDecisions: string
   recommendations: string
   nextSuggestedBatch: string
 }
@@ -42,6 +44,8 @@ const SECTION_ALIASES: Record<FieldKey, string[]> = {
   typescriptStatus: ['typescript status'],
   runtimeStatus: ['runtime status'],
   risksIdentified: ['risks identified', 'risks'],
+  technicalDebtIdentified: ['technical debt identified', 'technical debt'],
+  architectureDecisions: ['architecture decisions', 'architectural decisions'],
   recommendations: ['remaining recommendations', 'recommendations'],
   nextSuggestedBatch: ['suggested next batch', 'next suggested batch', 'recommended next batch'],
 }
@@ -83,6 +87,11 @@ function matchInlineValue(line: string): { key: FieldKey; value: string } | null
 function isEmptyValue(text: string): boolean {
   const t = text.trim().toLowerCase()
   return t === '' || t === 'none' || t === 'n/a' || t === '-' || t === '—'
+}
+
+/** Splits an already-joined report section (e.g. parsed.risksIdentified) back into discrete items, using the exact same bullet/comma rules as every list-style field above. */
+export function splitReportItems(text: string): string[] {
+  return parseListLines(text.split('\n'))
 }
 
 function parseListLines(lines: string[]): string[] {
@@ -148,8 +157,14 @@ export function parseClaudeReport(rawText: string): ParsedClaudeReport {
     if (current) sections[current]!.push(line)
   }
 
+  // A response with no recognizable section headers at all (Claude answering
+  // in plain prose instead of the requested format) must not be silently
+  // discarded into an empty executive summary — the raw text IS Claude's
+  // actual answer, so it becomes the summary rather than nothing.
+  const executiveSummary = parseTextValue(sections.executiveSummary ?? []) || parseTextValue([rawText])
+
   return {
-    executiveSummary: parseTextValue(sections.executiveSummary ?? []),
+    executiveSummary,
     filesCreated: parseListLines(sections.filesCreated ?? []),
     filesModified: parseListLines(sections.filesModified ?? []),
     filesDeleted: parseListLines(sections.filesDeleted ?? []),
@@ -157,6 +172,8 @@ export function parseClaudeReport(rawText: string): ParsedClaudeReport {
     typescriptStatus: parseStatusValue(sections.typescriptStatus ?? []),
     runtimeStatus: parseStatusValue(sections.runtimeStatus ?? []),
     risksIdentified: parseTextValue(sections.risksIdentified ?? []),
+    technicalDebtIdentified: parseTextValue(sections.technicalDebtIdentified ?? []),
+    architectureDecisions: parseTextValue(sections.architectureDecisions ?? []),
     recommendations: parseTextValue(sections.recommendations ?? []),
     nextSuggestedBatch: parseTextValue(sections.nextSuggestedBatch ?? []),
   }
@@ -167,6 +184,12 @@ export type { DevelopmentCompletionStatus }
 export type CompletionInput = {
   claudeModel: string
   originalPrompt: string
+  /** Only set when this report came from the Execution Runtime — never fabricated for a manually-pasted report. */
+  runtimeJobId?: string
+  runtimeDurationMs?: number | null
+  runtimeCostUsd?: number | null
+  claudeSessionId?: string | null
+  gitDiffSummary?: string
 }
 
 export type DevelopmentCompletionResult = {
@@ -244,6 +267,11 @@ export function completeDevelopmentCycle(
     risksIdentified: parsed.risksIdentified,
     recommendations: parsed.recommendations,
     nextSuggestedBatch: parsed.nextSuggestedBatch,
+    runtimeJobId: input.runtimeJobId ?? '',
+    runtimeDurationMs: input.runtimeDurationMs ?? null,
+    runtimeCostUsd: input.runtimeCostUsd ?? null,
+    claudeSessionId: input.claudeSessionId ?? null,
+    gitDiffSummary: input.gitDiffSummary ?? '',
   })
 
   const { status, reasons } = determineCompletionStatus(parsed)

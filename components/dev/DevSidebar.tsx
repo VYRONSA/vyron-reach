@@ -157,6 +157,26 @@ const NAV_ITEMS: { href: string; label: string; icon: ReactNode }[] = [
     ),
   },
   {
+    href: '/dev/assessment',
+    label: 'Assessment Centre',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-[18px] w-[18px]">
+        <path d="M9 3h6l1 3h3v15H5V6h3Z" />
+        <path d="M9 11l2 2 4-4M9 16h6" />
+      </svg>
+    ),
+  },
+  {
+    href: '/dev/planning',
+    label: 'Planning Centre',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-[18px] w-[18px]">
+        <rect x="4" y="4" width="16" height="16" rx="2" />
+        <path d="M8 2v4M16 2v4M4 10h16M9 14l2 2 4-4" />
+      </svg>
+    ),
+  },
+  {
     href: '/dev/git-build',
     label: 'Git & Build',
     icon: (
