@@ -5,6 +5,18 @@ import { captureGitDiffSummary } from '../../gitDiffCapture'
 import type { DevelopmentJob, RuntimePhase } from '../runtimeTypes'
 import type { ExecutionProvider, ExecutionProviderHandlers } from './types'
 
+/**
+ * Known limitation of this provider (external, not fixable here): if the
+ * process running this app is itself inside an active Claude Code coding
+ * session, that session's own tool-permission safeguards block this
+ * spawn before it starts — recursive execution from within Claude Code
+ * sessions is not supported. A normal deployed run (not itself inside a
+ * Claude Code session) is unaffected. This cannot be validated by
+ * attempting it from inside the same session doing the developing — test
+ * it from a real browser against a dev server started outside any active
+ * Claude Code session instead. See providerAdapter.ts's knownLimitations.
+ */
+
 /** 15 minutes — a generous ceiling for one batch-sized implementation task, not a guess at Claude's own limits. */
 const RUNTIME_TIMEOUT_MS = 15 * 60 * 1000
 
@@ -143,7 +155,7 @@ async function run(job: DevelopmentJob, handlers: ExecutionProviderHandlers): Pr
         completedAt: new Date().toISOString(),
         duration: Date.now() - start,
         stderr,
-        error: `Failed to launch the claude CLI: ${err.message}. Is it installed and on PATH?`,
+        error: `Failed to launch the claude CLI: ${err.message}. Either it isn't installed/on PATH, or — if this server is itself running inside an active Claude Code coding session — recursive execution from within Claude Code sessions is not supported (a known, external runtime limitation, not fixable here).`,
       })
       resolve()
     })
