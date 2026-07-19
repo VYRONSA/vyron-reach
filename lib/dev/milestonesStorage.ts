@@ -116,6 +116,31 @@ export function getCurrentMilestone(slug: string): Milestone | null {
   )
 }
 
+/**
+ * Planning Rule: "Milestone status derives from batch completion." Pure —
+ * takes the milestone's own batch statuses (the caller resolves these via
+ * batchesForMilestone, which lives in batchesStorage.ts) rather than this
+ * module importing batchesStorage itself, since batchesStorage already
+ * imports milestonesForProject from here — importing back would be
+ * circular. 'At Risk' is the one manual escalation this never downgrades
+ * on its own; reaching Complete is the only thing allowed to override it,
+ * since fully-finished work can't stay "at risk."
+ */
+export function deriveMilestoneStatus(batchStatuses: string[], currentStatus: MilestoneStatus): MilestoneStatus {
+  if (batchStatuses.length === 0) return currentStatus
+  if (batchStatuses.every(s => s === 'Complete')) return 'Complete'
+  if (currentStatus === 'At Risk') return 'At Risk'
+  return batchStatuses.some(s => s === 'Active' || s === 'Complete') ? 'In Progress' : 'Upcoming'
+}
+
+/** Applies deriveMilestoneStatus and persists the change only when the derived status actually differs — called from batchesStorage.ts's planning-state enforcement whenever a batch write could change its milestone's completion picture. */
+export function syncMilestoneStatus(milestoneId: string, batchStatuses: string[]): void {
+  const milestone = getMilestones().find(m => m.id === milestoneId)
+  if (!milestone) return
+  const derived = deriveMilestoneStatus(batchStatuses, milestone.status)
+  if (derived !== milestone.status) updateMilestone(milestoneId, { status: derived })
+}
+
 /** Progress computed from Milestones: complete / total. Null when no milestones exist yet. */
 export function getMilestoneProgress(slug: string): number | null {
   const items = milestonesForProject(slug)

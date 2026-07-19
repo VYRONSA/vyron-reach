@@ -7,14 +7,30 @@ export type BuildValidationStatus = 'Passing' | 'Failing' | typeof UNKNOWN
 export type BuildReadiness = 'Ready' | 'Needs Review' | 'Blocked'
 export type BuildConfidence = 'High' | 'Medium' | 'Low' | typeof UNKNOWN
 
+/**
+ * The three states the mission's Review Package must show for Build:
+ * PASS (exit 0, no warnings), PASS (Warnings) (exit 0, warnings present),
+ * FAILED (non-zero exit / compile / typecheck failure). Warnings never
+ * downgrade PASS to FAILED — only the exit code does that.
+ */
+export type BuildResultDisplay = 'PASS' | 'PASS (Warnings)' | 'FAILED' | typeof UNKNOWN
+
 export type BuildIntelligence = {
   buildAvailable: boolean
   lastBuildStatus: BuildValidationStatus
   lastTypeScriptStatus: BuildValidationStatus
+  buildWarningCount: number
+  buildResultDisplay: BuildResultDisplay
   buildTimestamp: string
   buildEnvironment: string
   buildReadiness: BuildReadiness
   buildConfidence: BuildConfidence
+}
+
+export function getBuildResultDisplay(status: BuildValidationStatus, warningCount: number): BuildResultDisplay {
+  if (status === UNKNOWN) return UNKNOWN
+  if (status === 'Failing') return 'FAILED'
+  return warningCount > 0 ? 'PASS (Warnings)' : 'PASS'
 }
 
 function normalizeStatus(value: unknown): BuildValidationStatus {
@@ -65,6 +81,7 @@ function computeBuildConfidence(timestamp: string): BuildConfidence {
 export function getBuildIntelligence(): BuildIntelligence {
   const lastBuildStatus = normalizeStatus(lastValidation.build)
   const lastTypeScriptStatus = normalizeStatus(lastValidation.typescript)
+  const buildWarningCount = typeof lastValidation.buildWarningCount === 'number' ? lastValidation.buildWarningCount : 0
   const buildTimestamp = lastValidation.checkedAt || UNAVAILABLE
   const buildAvailable = lastBuildStatus !== UNKNOWN || lastTypeScriptStatus !== UNKNOWN
 
@@ -72,6 +89,8 @@ export function getBuildIntelligence(): BuildIntelligence {
     buildAvailable,
     lastBuildStatus,
     lastTypeScriptStatus,
+    buildWarningCount,
+    buildResultDisplay: getBuildResultDisplay(lastBuildStatus, buildWarningCount),
     buildTimestamp,
     buildEnvironment: process.env.NODE_ENV ?? UNKNOWN,
     buildReadiness: computeBuildReadiness(lastBuildStatus, lastTypeScriptStatus),

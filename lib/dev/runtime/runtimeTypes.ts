@@ -1,4 +1,5 @@
 import type { ValidationStatus } from '../handoverStorage'
+import type { ExecutionIdentity } from './executionIdentity'
 
 export type JobStatus = 'Queued' | 'Running' | 'Validating' | 'Updating' | 'Completed' | 'Rejected' | 'Failed' | 'Cancelled'
 
@@ -68,6 +69,12 @@ export type DevelopmentJob = {
   currentPhase: RuntimePhase | null
   /** Set when this job is a Retry that resumed a previous Claude session rather than starting fresh — the session id it resumed, for display/audit only. */
   resumedSessionId: string | null
+  /** The formal Execution Identity this job ran under — null only for jobs created before this concept existed. See executionIdentity.ts. */
+  executionIdentity: ExecutionIdentity | null
+  /** executionIdentityKey(executionIdentity), precomputed at creation time — '' when executionIdentity is null. The single field Recurrence Detection compares instead of raw objective text. */
+  executionIdentityKey: string
+  /** True when this run resumed a previous Claude session (a CEO-initiated Retry) — Recurrence Detection's "Explicit rerun requested by CEO" allow-condition; such jobs are never counted toward an Execution Loop finding. */
+  explicitRerun: boolean
 }
 
 export type CreateJobInput = {
@@ -78,4 +85,6 @@ export type CreateJobInput = {
   prompt: string
   /** When set, the provider resumes this Claude session instead of starting fresh — used by Retry when the previous attempt got far enough to receive a session id before failing. */
   resumeSessionId?: string
+  /** Built by the caller via buildExecutionIdentity() before the job is created — the Execution Context Builder always has session/git/knowledge in scope, the Runtime Engine does not. */
+  executionIdentity?: ExecutionIdentity
 }

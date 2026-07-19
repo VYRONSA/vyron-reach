@@ -77,6 +77,8 @@ export type DeploymentSnapshot = {
 export type ContinuousValidationResult = {
   buildStatus: 'Passing' | 'Failing'
   typescriptStatus: 'Passing' | 'Failing'
+  /** Count of build warnings (e.g. Turbopack) — never affects buildStatus; a Passing build can still carry warnings. */
+  buildWarningCount: number
   durationMs: number
   checkedAt: string
   buildOutput: string

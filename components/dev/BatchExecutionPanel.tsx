@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import type { GitIntelligence } from '@/lib/dev/gitIntelligence'
 import type { DeploymentIntelligence } from '@/lib/dev/deploymentIntelligence'
-import type { BuildIntelligence } from '@/lib/dev/buildIntelligence'
+import { getBuildResultDisplay, type BuildIntelligence } from '@/lib/dev/buildIntelligence'
 import { getBatches, type Batch } from '@/lib/dev/batchesStorage'
 import { getMilestones } from '@/lib/dev/milestonesStorage'
 import { decisionsForBatch } from '@/lib/dev/decisionsStorage'
@@ -19,6 +19,7 @@ import { getExecutiveActions } from '@/lib/dev/executiveActionEngine'
 import { getGeneratedPrompt } from '@/lib/dev/promptIntelligenceEngine'
 import { getLatestHandover } from '@/lib/dev/handoverStorage'
 import type { ReviewPackage } from '@/lib/dev/runtime/reviewPackage'
+import type { ExecutionIdentity } from '@/lib/dev/runtime/executionIdentity'
 import { useExecutionService } from './useExecutionService'
 import { copyToClipboard, DevBadge, DevCard, DevEmptyState, DevPageHeader } from './ui'
 
@@ -191,7 +192,16 @@ function BatchExecutionPanelWithProject({
                   <div className="mt-4 border-t border-[var(--dev-border)] pt-4">
                     <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--dev-accent)]">Validation Status</div>
                     <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      <ValidationField label="Build" value={state.validationResult?.buildStatus ?? state.job?.buildStatus ?? 'Unknown'} />
+                      <ValidationField
+                        label="Build"
+                        value={getBuildResultDisplay(
+                          state.validationResult?.buildStatus ?? state.job?.buildStatus ?? 'Unknown',
+                          state.validationResult?.buildWarningCount ?? 0
+                        )}
+                        hint={
+                          state.validationResult?.buildWarningCount ? `${state.validationResult.buildWarningCount} warning(s)` : undefined
+                        }
+                      />
                       <ValidationField label="TypeScript" value={state.validationResult?.typescriptStatus ?? state.job?.typescriptStatus ?? 'Unknown'} />
                       <ValidationField label="Duration" value={state.job?.duration ? `${Math.round(state.job.duration / 1000)}s` : 'Unknown'} />
                       <ValidationField label="Cost" value={state.job?.cost !== null && state.job?.cost !== undefined ? `$${state.job.cost.toFixed(4)}` : 'Unknown'} />
@@ -322,11 +332,12 @@ function phaseTone(phase: string): 'success' | 'warning' | 'danger' | 'neutral' 
   return 'info'
 }
 
-function ValidationField({ label, value }: { label: string; value: string }) {
+function ValidationField({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="min-w-0">
       <div className="text-[10px] uppercase tracking-wide text-[var(--dev-text-faint)]">{label}</div>
       <div className="mt-0.5 text-sm font-medium text-[var(--dev-text)]">{value}</div>
+      {hint ? <div className="mt-0.5 text-[10px] text-[var(--dev-text-faint)]">{hint}</div> : null}
     </div>
   )
 }
@@ -353,6 +364,16 @@ function ReviewPackageView({ pkg }: { pkg: ReviewPackage }) {
     <div className="mt-2 rounded-lg border border-[var(--dev-border)] p-3">
       {pkg.engineeringSummary ? <p className="text-sm text-[var(--dev-text)]">{pkg.engineeringSummary}</p> : null}
 
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <div>
+          <div className="text-[10px] uppercase tracking-wide text-[var(--dev-text-faint)]">Build</div>
+          <div className="mt-0.5 text-sm font-medium text-[var(--dev-text)]">{pkg.buildResultDisplay}</div>
+        </div>
+        {pkg.buildWarningCount > 0 ? (
+          <span className="text-xs text-[var(--dev-text-faint)]">{pkg.buildWarningCount} warning(s)</span>
+        ) : null}
+      </div>
+
       <ReviewList label="Files Created" items={pkg.filesCreated} />
       <ReviewList label="Files Modified" items={pkg.filesModified} />
       <ReviewList label="Architecture Changes" items={pkg.architectureChanges} />
@@ -374,6 +395,37 @@ function ReviewPackageView({ pkg }: { pkg: ReviewPackage }) {
           </li>
         ))}
       </ul>
+
+      {pkg.executionIdentity ? <ExecutionIdentityView identity={pkg.executionIdentity} /> : null}
+    </div>
+  )
+}
+
+/** What exactly this CEO Review is a review of — the same Execution Identity Recurrence Detection compares, made visible instead of implied. */
+function ExecutionIdentityView({ identity }: { identity: ExecutionIdentity }) {
+  const rows: [string, string][] = [
+    ['Product', identity.product],
+    ['Project', identity.project],
+    ['Phase', identity.phase],
+    ['Milestone', identity.milestoneTitle ?? 'None'],
+    ['Batch', identity.batchNumber ? `Batch ${identity.batchNumber} (${identity.batchStatus})` : 'None'],
+    ['Repository Commit', identity.repositoryCommit ?? 'Unavailable'],
+    ['CEO Decision', identity.ceoDecision],
+    ['Knowledge Version', identity.knowledgeVersion],
+  ]
+  return (
+    <div className="mt-3 border-t border-[var(--dev-border)] pt-3">
+      <div className="text-[10px] uppercase tracking-wide text-[var(--dev-text-faint)]">Execution Identity</div>
+      <dl className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+        {rows.map(([label, value]) => (
+          <div key={label} className="flex items-baseline justify-between gap-2">
+            <dt className="text-[var(--dev-text-faint)]">{label}</dt>
+            <dd className="truncate text-right text-[var(--dev-text-muted)]" title={value}>
+              {value}
+            </dd>
+          </div>
+        ))}
+      </dl>
     </div>
   )
 }

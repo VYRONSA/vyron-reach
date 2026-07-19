@@ -7,6 +7,7 @@ import type { DeploymentIntelligence } from '../deploymentIntelligence'
 import { getHandovers, type Handover } from '../handoverStorage'
 import type { DevelopmentJob } from './runtimeTypes'
 import { buildDevelopmentContext } from './runtimeContextBuilder'
+import { buildExecutionIdentity, computeKnowledgeVersion } from './executionIdentity'
 import { planNextDevelopmentTask, type PlannedTask } from './developmentPlanningEngine'
 import type { GeneratedPrompt } from '../promptIntelligenceEngine'
 import { completeDevelopmentCycle, parseClaudeReport } from '../developmentCompletionEngine'
@@ -293,6 +294,12 @@ export function createExecutionService(deps: ExecutionServiceDeps) {
         return
       }
 
+      const executionIdentity = buildExecutionIdentity(deps.session, {
+        git: deps.git,
+        ceoDecision: 'Pending',
+        knowledgeVersion: computeKnowledgeVersion(knowledge),
+      })
+
       const { job: created } = await fetchJson<{ job: DevelopmentJob }>('/api/dev/runtime/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -303,6 +310,7 @@ export function createExecutionService(deps: ExecutionServiceDeps) {
           objective: task?.description ?? '',
           prompt: prompt.fullText,
           resumeSessionId,
+          executionIdentity,
         }),
       })
       setState({ job: created, phase: 'queued' })

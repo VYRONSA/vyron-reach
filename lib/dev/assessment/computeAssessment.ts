@@ -43,6 +43,8 @@ const UNAVAILABLE_BUILD: BuildIntelligence = {
   buildAvailable: false,
   lastBuildStatus: 'Unknown',
   lastTypeScriptStatus: 'Unknown',
+  buildWarningCount: 0,
+  buildResultDisplay: 'Unknown',
   buildTimestamp: 'Unavailable',
   buildEnvironment: 'Unknown',
   buildReadiness: 'Needs Review',

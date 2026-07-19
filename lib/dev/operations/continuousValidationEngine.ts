@@ -17,6 +17,21 @@ function run(cmd: string, args: string[], cwd: string): Promise<{ code: number; 
 }
 
 /**
+ * Warnings never affect buildStatus (exit code is the only thing that
+ * does) — this only counts them so PASS and PASS-with-warnings can be told
+ * apart in the Review Package. Covers both warning shapes Next.js/Turbopack
+ * actually emits: standalone "⚠ Warning: ..." lines, and the "Turbopack
+ * build encountered N warnings:" summary that precedes a list of
+ * file-level warnings.
+ */
+function countBuildWarnings(output: string): number {
+  const standaloneWarnings = (output.match(/^⚠\s/gm) ?? []).length
+  const turbopackMatch = output.match(/Turbopack build encountered (\d+) warnings?/i)
+  const turbopackCount = turbopackMatch ? Number(turbopackMatch[1]) : 0
+  return standaloneWarnings + turbopackCount
+}
+
+/**
  * The Continuous Validation Engine's subprocess half — actually runs
  * `npm run build` and `npx tsc --noEmit`, the exact two commands this
  * project's own batch workflow has run after every single change, and
@@ -33,13 +48,18 @@ export async function runContinuousValidation(cwd: string): Promise<ContinuousVa
 
   const buildStatus: 'Passing' | 'Failing' = buildResult.code === 0 ? 'Passing' : 'Failing'
   const typescriptStatus: 'Passing' | 'Failing' = tscResult.code === 0 ? 'Passing' : 'Failing'
+  const buildWarningCount = countBuildWarnings(buildResult.stdout + buildResult.stderr)
   const checkedAt = new Date().toISOString()
 
   try {
     const validationPath = path.join(cwd, 'lib', 'dev', 'lastValidation.json')
     fs.writeFileSync(
       validationPath,
-      JSON.stringify({ typescript: typescriptStatus.toLowerCase(), build: buildStatus.toLowerCase(), checkedAt }, null, 2)
+      JSON.stringify(
+        { typescript: typescriptStatus.toLowerCase(), build: buildStatus.toLowerCase(), buildWarningCount, checkedAt },
+        null,
+        2
+      )
     )
   } catch {
     // best-effort persistence — the validation result is still returned even if the write fails
@@ -48,6 +68,7 @@ export async function runContinuousValidation(cwd: string): Promise<ContinuousVa
   return {
     buildStatus,
     typescriptStatus,
+    buildWarningCount,
     durationMs,
     checkedAt,
     buildOutput: (buildResult.stdout + buildResult.stderr).slice(-4000),

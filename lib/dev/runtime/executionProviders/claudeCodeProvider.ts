@@ -106,7 +106,6 @@ function parseStreamLine(line: string): { phase?: RuntimePhase; resultLine?: str
 async function run(job: DevelopmentJob, handlers: ExecutionProviderHandlers): Promise<void> {
   const { updateJob, getJob } = handlers
   const startedAt = new Date().toISOString()
-  updateJob({ status: 'Running', startedAt, currentPhase: 'Launching Claude' })
   const start = Date.now()
 
   await new Promise<void>(resolve => {
@@ -124,7 +123,15 @@ async function run(job: DevelopmentJob, handlers: ExecutionProviderHandlers): Pr
       shell: false,
     })
     activeProcesses.set(job.id, child)
-    updateJob({ pid: child.pid ?? null })
+    // status and pid are set together, in one write, deliberately — not
+    // status first and pid moments later. A job briefly recorded as
+    // Running with no pid yet is indistinguishable from a genuinely dead
+    // process to the orphan-detection check (isProcessAlive(null) is
+    // false), so a poll landing in that gap could previously mark a job
+    // that had just barely started as orphaned. Node populates
+    // child.pid synchronously once spawn() returns, so there's no reason
+    // for these to ever be two writes.
+    updateJob({ status: 'Running', startedAt, currentPhase: 'Launching Claude', pid: child.pid ?? null })
 
     const timer = setTimeout(() => {
       timedOut = true

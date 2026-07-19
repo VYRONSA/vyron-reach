@@ -9,6 +9,7 @@ import type { DeploymentIntelligence } from '@/lib/dev/deploymentIntelligence'
 import type { BuildIntelligence } from '@/lib/dev/buildIntelligence'
 import { DevBadge, DevCard, DevTabBar } from './ui'
 import { ExecutiveCommandCentre } from './ExecutiveCommandCentre'
+import { LiveEngineeringCommandCentre } from './LiveEngineeringCommandCentre'
 import { DevelopmentPlanPanel } from './DevelopmentPlanPanel'
 import { GitIntelligenceCard } from './GitIntelligenceCard'
 import { DeploymentIntelligenceCard } from './DeploymentIntelligenceCard'
@@ -28,6 +29,7 @@ import { ReleasesLog } from './ReleasesLog'
 
 type Tab =
   | 'overview'
+  | 'director'
   | 'roadmap'
   | 'milestones'
   | 'batches'
@@ -43,6 +45,7 @@ type Tab =
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
+  { id: 'director', label: 'Director' },
   { id: 'roadmap', label: 'Roadmap' },
   { id: 'milestones', label: 'Milestones' },
   { id: 'batches', label: 'Batches' },
@@ -210,6 +213,7 @@ export function ProjectWorkspaceTabs({
           </div>
         ) : null}
 
+        {tab === 'director' ? <LiveEngineeringCommandCentre projectSlug={project.slug} /> : null}
         {tab === 'roadmap' ? <ProjectListSection projectSlug={project.slug} kind="roadmap" /> : null}
         {tab === 'milestones' ? <MilestonesBoard projectFilter={project.slug} /> : null}
         {tab === 'batches' ? <BatchesBoard projectFilter={project.slug} /> : null}

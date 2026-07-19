@@ -71,25 +71,49 @@ function detectRepeatedRecommendations(handovers: Handover[]): EngineeringFindin
   return findings
 }
 
+/**
+ * Recurrence Detection — compares Execution Identity, never generic
+ * runtime/prompt text. Two jobs only count as "the same execution
+ * repeating" when their executionIdentityKey matches exactly: same
+ * project/milestone/batch, same batch revision, same repository commit,
+ * same knowledge version (see executionIdentity.ts — that key is built
+ * from exactly these fields, so "the key changed" and "something
+ * meaningful changed" are the same fact). Jobs with no recorded identity
+ * (created before this concept existed) each get a unique fallback key so
+ * legacy history never falsely groups together.
+ *
+ * Two further conditions apply before a finding is raised, matching the
+ * Planning Rules' Recurrence Detection allow-list:
+ * - explicitRerun jobs (a CEO-initiated Retry) are excluded entirely —
+ *   "Explicit rerun requested by CEO" is always allowed.
+ * - A group where any job was applied or rejected is excluded — "CEO
+ *   rejected previous result" is an active human decision, not silent
+ *   unattended repetition, and an applied job means it already converged.
+ */
 function detectExecutionLoops(jobs: DevelopmentJob[]): EngineeringFinding[] {
-  const recent = jobs.slice(0, 5).filter(j => j.objective.trim() !== '')
-  const counts = new Map<string, number>()
-  for (const j of recent) counts.set(j.objective, (counts.get(j.objective) ?? 0) + 1)
+  const recent = jobs.slice(0, 5).filter(j => !j.explicitRerun)
+  const groups = new Map<string, DevelopmentJob[]>()
+  for (const j of recent) {
+    const key = j.executionIdentityKey || `legacy:${j.id}`
+    const group = groups.get(key) ?? []
+    group.push(j)
+    groups.set(key, group)
+  }
 
   const findings: EngineeringFinding[] = []
-  for (const [objective, count] of counts) {
-    const anyApplied = recent.some(j => j.objective === objective && j.appliedAt)
-    if (count >= 2 && !anyApplied) {
-      findings.push({
-        module: 'Runtime',
-        category: 'Execution Loop',
-        severity: 'High',
-        title: 'The same objective was attempted repeatedly without completing',
-        evidence: `"${objective}" appears in ${count} of the last ${recent.length} runtime jobs, none applied.`,
-        location: null,
-        recommendation: `"${objective}" isn't converging — break it into a smaller task or investigate why it keeps failing to complete.`,
-      })
-    }
+  for (const group of groups.values()) {
+    if (group.length < 2) continue
+    if (group.some(j => j.appliedAt || j.rejectedAt)) continue
+    const sample = group[0]
+    findings.push({
+      module: 'Runtime',
+      category: 'Execution Loop',
+      severity: 'High',
+      title: 'The same execution identity was attempted repeatedly without completing',
+      evidence: `Batch ${sample.batchId || 'unassigned'} (objective: "${sample.objective}") ran ${group.length} times in the last ${recent.length} runtime jobs with no repository, batch, or knowledge change, and none applied.`,
+      location: null,
+      recommendation: "This execution isn't converging under an unchanged execution identity — break it into a smaller task or investigate why it keeps failing to complete.",
+    })
   }
   return findings
 }

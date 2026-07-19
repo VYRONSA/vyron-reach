@@ -4,6 +4,7 @@ import { enqueueDevelopmentJob } from './runtimeQueue'
 import { killDevelopmentJob } from './claudeRuntime'
 import { assertTransition } from './executionStateMachine'
 import { isProcessAlive } from './processLiveness'
+import { executionIdentityKey } from './executionIdentity'
 import type { CreateJobInput, DevelopmentJob } from './runtimeTypes'
 
 /**
@@ -47,6 +48,9 @@ export function createDevelopmentJob(input: CreateJobInput): DevelopmentJob {
     pid: null,
     currentPhase: null,
     resumedSessionId: input.resumeSessionId ?? null,
+    executionIdentity: input.executionIdentity ?? null,
+    executionIdentityKey: input.executionIdentity ? executionIdentityKey(input.executionIdentity) : '',
+    explicitRerun: Boolean(input.resumeSessionId),
   }
   saveJob(job)
   enqueueDevelopmentJob(job)
@@ -54,16 +58,31 @@ export function createDevelopmentJob(input: CreateJobInput): DevelopmentJob {
 }
 
 /**
- * A job left at Running/Validating with a pid that's no longer alive means
- * the server process that was driving it died (crash, restart, `Windows
- * restarts`, etc.) — the in-memory ChildProcess handle and queue promise
+ * A job left at Running/Validating with a pid that's confirmed no longer
+ * alive means the server process that was driving it died (crash,
+ * restart, etc.) — the in-memory ChildProcess handle and queue promise
  * chain (claudeCodeProvider.ts, runtimeQueue.ts) don't survive that, so
  * without this check the job would sit at "Running" forever with no way
  * to tell a real crash from a merely slow one. Called on every read so the
  * client never has to notice this itself — it always sees accurate state.
+ *
+ * Requires `pid` to be a real, recorded value — `job.pid === null` means
+ * "no pid on record yet," which is not the same fact as "the process at
+ * this pid is dead," and must not be treated as orphaned (claudeCodeProvider.ts
+ * now records status and pid in the same write, so this case shouldn't
+ * arise in practice, but this check stays honest about what it can
+ * actually conclude rather than defaulting an indeterminate case to
+ * "orphaned").
+ *
+ * The write itself goes through updateJob, which independently re-checks
+ * (atomically, under its own lock) that the job's CURRENT status still
+ * legally transitions to Failed — so even a stale `job` argument here
+ * (e.g. a status this function decided was Running moments before it
+ * actually reached Completed) can never downgrade a job that has since
+ * legitimately finished; the write is simply dropped in that case.
  */
 function reconcileIfOrphaned(job: DevelopmentJob): DevelopmentJob {
-  if ((job.status === 'Running' || job.status === 'Validating') && !isProcessAlive(job.pid)) {
+  if ((job.status === 'Running' || job.status === 'Validating') && job.pid !== null && !isProcessAlive(job.pid)) {
     return (
       updateJob(job.id, {
         status: 'Failed',

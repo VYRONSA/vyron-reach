@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
     objective: body.objective ?? '',
     prompt: body.prompt,
     resumeSessionId: body.resumeSessionId,
+    executionIdentity: body.executionIdentity,
   })
 
   return NextResponse.json({ job }, { status: 201 })

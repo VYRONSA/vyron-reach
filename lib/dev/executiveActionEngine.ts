@@ -127,7 +127,7 @@ function buildBatchActions(session: DevelopmentSession, dependencies: Developmen
         sourceEngine: 'Self Development Engine',
         recommendedAction: plan.recommendedNextTask.task
           ? `Continue with: ${plan.recommendedNextTask.task.title}`
-          : 'Continue implementing the current batch objective.',
+          : `Continue implementing Batch ${batch.batchNumber}'s objective.`,
         blocking: false,
         estimatedImpact: IMPACT.High,
         href: `/dev/batches?focus=${batch.id}`,

@@ -1,5 +1,6 @@
 {
   "typescript": "passing",
-  "build": "passing",
-  "checkedAt": "2026-07-15T00:00:00.000Z"
+  "build": "failing",
+  "buildWarningCount": 3,
+  "checkedAt": "2026-07-19T17:30:42.532Z"
 }

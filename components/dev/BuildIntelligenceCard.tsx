@@ -7,10 +7,20 @@ const EMPTY_BUILD: BuildIntelligence = {
   buildAvailable: false,
   lastBuildStatus: 'Unknown',
   lastTypeScriptStatus: 'Unknown',
+  buildWarningCount: 0,
+  buildResultDisplay: 'Unknown',
   buildTimestamp: 'Unavailable',
   buildEnvironment: 'Unknown',
   buildReadiness: 'Needs Review',
   buildConfidence: 'Unknown',
+}
+
+/** Tone mapping for the tri-state Build result (PASS / PASS (Warnings) / FAILED) — distinct from devValidationTone since a warning-carrying pass still needs to read as amber, not green. */
+function buildResultTone(display: BuildIntelligence['buildResultDisplay']): 'success' | 'warning' | 'danger' | 'neutral' {
+  if (display === 'PASS') return 'success'
+  if (display === 'PASS (Warnings)') return 'warning'
+  if (display === 'FAILED') return 'danger'
+  return 'neutral'
 }
 
 function fmt(iso: string) {
@@ -37,10 +47,13 @@ export function BuildIntelligenceCard({ build }: { build?: BuildIntelligence }) 
 
       <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
         <DevField label="Build Status">
-          <DevBadge tone={devValidationTone(info.lastBuildStatus)}>{info.lastBuildStatus}</DevBadge>
+          <DevBadge tone={buildResultTone(info.buildResultDisplay)}>{info.buildResultDisplay}</DevBadge>
         </DevField>
         <DevField label="TypeScript Status">
           <DevBadge tone={devValidationTone(info.lastTypeScriptStatus)}>{info.lastTypeScriptStatus}</DevBadge>
+        </DevField>
+        <DevField label="Build Warnings">
+          <span className="text-sm text-[var(--dev-text)]">{info.buildWarningCount}</span>
         </DevField>
         <DevField label="Build Confidence">
           <span className="text-sm text-[var(--dev-text)]">{info.buildConfidence}</span>

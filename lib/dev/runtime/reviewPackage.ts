@@ -2,8 +2,10 @@ import type { ParsedClaudeReport } from '../developmentCompletionEngine'
 import { splitReportItems } from '../developmentCompletionEngine'
 import type { WorkforceReport } from '../agents/agentWorkforce'
 import type { ContinuousValidationResult } from '../operations/operationsTypes'
+import { getBuildResultDisplay, type BuildResultDisplay } from '../buildIntelligence'
 import type { KnowledgeUpdateSummary } from './knowledgeUpdateEngine'
 import type { DevelopmentJob } from './runtimeTypes'
+import type { ExecutionIdentity } from './executionIdentity'
 
 export type CeoChecklistItem = {
   label: string
@@ -20,10 +22,15 @@ export type ReviewPackage = {
   /** Best-effort categorization of filesCreated/filesModified by path pattern (auth/security/permission/rls/policy keywords) — same caveat as databaseChanges. */
   securityChanges: string[]
   buildResult: DevelopmentJob['buildStatus']
+  /** PASS / PASS (Warnings) / FAILED — what the mission's Review Package must render for Build, warnings never counting as failure. */
+  buildResultDisplay: BuildResultDisplay
+  buildWarningCount: number
   typescriptResult: DevelopmentJob['typescriptStatus']
   validationResult: ContinuousValidationResult | null
   knowledgeUpdates: KnowledgeUpdateSummary
   ceoChecklist: CeoChecklistItem[]
+  /** The formal Execution Identity this job ran under (executionIdentity.ts) — null only for jobs created before this concept existed. The CEO Review surface's authoritative "what exactly is this a review of" record. */
+  executionIdentity: ExecutionIdentity | null
 }
 
 const DATABASE_PATTERN = /(^|\/)supabase\/|\.sql$/i
@@ -50,9 +57,11 @@ export function buildReviewPackage(
   knowledgeUpdates: KnowledgeUpdateSummary
 ): ReviewPackage {
   const allChangedFiles = [...parsed.filesCreated, ...parsed.filesModified]
+  const buildResult = validation?.buildStatus ?? job.buildStatus
+  const buildWarningCount = validation?.buildWarningCount ?? 0
 
   const checklist: CeoChecklistItem[] = [
-    { label: 'Build passing', passed: (validation?.buildStatus ?? job.buildStatus) === 'Passing' },
+    { label: 'Build passing', passed: buildResult === 'Passing' },
     { label: 'TypeScript passing', passed: (validation?.typescriptStatus ?? job.typescriptStatus) === 'Passing' },
     { label: 'No risks identified in this execution', passed: splitReportItems(parsed.risksIdentified).length === 0 },
     { label: 'Git diff captured', passed: Boolean(job.gitDiffSummary) },
@@ -68,10 +77,13 @@ export function buildReviewPackage(
     architectureChanges: splitReportItems(parsed.architectureDecisions),
     databaseChanges: categorize(allChangedFiles, DATABASE_PATTERN),
     securityChanges: categorize(allChangedFiles, SECURITY_PATTERN),
-    buildResult: validation?.buildStatus ?? job.buildStatus,
+    buildResult,
+    buildResultDisplay: getBuildResultDisplay(buildResult, buildWarningCount),
+    buildWarningCount,
     typescriptResult: validation?.typescriptStatus ?? job.typescriptStatus,
     validationResult: validation,
     knowledgeUpdates,
     ceoChecklist: checklist,
+    executionIdentity: job.executionIdentity,
   }
 }
