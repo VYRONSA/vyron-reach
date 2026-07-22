@@ -3,6 +3,7 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { tryCreateExclusive } from '../fileLock'
 import { isProcessAlive } from '../runtime/processLiveness'
+import { getVyronDevDataDir } from '../vyronDevDataDir'
 
 /**
  * Durable, atomic ownership of "who may run this project's Engineering
@@ -17,16 +18,19 @@ import { isProcessAlive } from '../runtime/processLiveness'
  * holder at a time" is enforced by the OS, not by JavaScript.
  */
 
-const LOCK_DIR = path.join(process.cwd(), '.vyron-dev', 'director-locks')
+function lockDir(): string {
+  return path.join(getVyronDevDataDir(), 'director-locks')
+}
 
 type LockContents = { owner: string; pid: number; acquiredAt: string }
 
 function lockFile(project: string): string {
-  return path.join(LOCK_DIR, `${project}.lock`)
+  return path.join(lockDir(), `${project}.lock`)
 }
 
 function ensureDir(): void {
-  if (!fs.existsSync(LOCK_DIR)) fs.mkdirSync(LOCK_DIR, { recursive: true })
+  const dir = lockDir()
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 }
 
 function readLock(file: string): LockContents | null {

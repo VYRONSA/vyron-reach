@@ -6,6 +6,7 @@ import type { DevelopmentSession } from '../developmentOrchestrator'
 import type { DevelopmentConversationMemory } from '../developmentConversationMemoryEngine'
 import type { Handover } from '../handoverStorage'
 import type { RelevantKnowledge } from '../learning/learningTypes'
+import type { EngineeringIntelligenceContext } from '../director/engineeringIntelligence/engineeringIntelligenceTypes'
 import type { DevelopmentJob } from './runtimeTypes'
 
 export type DevelopmentContext = {
@@ -38,6 +39,19 @@ export type DevelopmentContext = {
   typescriptStatus: string
   /** From the Knowledge Engine (lib/dev/learning/) — null when the caller doesn't have it (e.g. it wasn't fetched yet), never fabricated. */
   relevantKnowledge: RelevantKnowledge | null
+  /**
+   * The Engineering Intelligence pipeline's structured retrieval result
+   * (lib/dev/director/engineeringIntelligence/) — organisational
+   * knowledge (decisions, risks, technical debt, learned patterns, past
+   * outcomes, worker reviews, resolved incidents) gathered for this
+   * specific task, grouped by source with honest gaps recorded for
+   * anything not found. Null when the caller hasn't run the pipeline
+   * (e.g. the browser-attended path, which does not populate this
+   * field today — see buildServerDevelopmentContext in
+   * lib/dev/director/serverContextBuilder.ts for the one caller that
+   * does).
+   */
+  engineeringIntelligence: EngineeringIntelligenceContext | null
 }
 
 /**
@@ -94,5 +108,9 @@ export function buildDevelopmentContext(
     buildStatus: session.buildStatus,
     typescriptStatus: session.typescriptStatus,
     relevantKnowledge,
+    // The browser-attended path does not run the Engineering Intelligence
+    // pipeline (a headless-loop concern) — see this field's own doc
+    // comment on DevelopmentContext above.
+    engineeringIntelligence: null,
   }
 }

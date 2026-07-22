@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import {
@@ -131,6 +132,16 @@ export function AdminProjectForm({ project }: { project?: Project }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-[var(--dev-border)] bg-[var(--dev-surface)] p-6">
+      {!isEdit ? (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+          This creates a project record only — no engineering assessment, milestones, or delivery batches. For the full assessed-and-approved
+          path, use{' '}
+          <Link href="/dev/initiation/new" className="underline underline-offset-2">
+            Project Initiation
+          </Link>{' '}
+          instead.
+        </div>
+      ) : null}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Project Name">
           <DevInput value={form.name} onChange={e => handleNameChange(e.target.value)} required />

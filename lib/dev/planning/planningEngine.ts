@@ -223,6 +223,8 @@ export function buildPlanningHistoryRecord(plan: EngineeringPlan): PlanningHisto
     projectSlug: plan.projectSlug,
     plan,
     approvalResult: null,
+    decidedBy: null,
+    decidedAt: null,
     executionResult: 'NotExecuted',
     actualDurationHours: null,
     success: null,

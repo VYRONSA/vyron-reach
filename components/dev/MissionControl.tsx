@@ -32,6 +32,17 @@ const PRIORITY_TONE: Record<string, 'danger' | 'warning' | 'info' | 'neutral'> =
  * CEO reviews the result (Build/TypeScript validation + the parsed
  * report) and must click Approve or Reject before anything is written to
  * the Handover/Batch/Milestone/knowledge stores.
+ *
+ * PRAT-1 DEF-001 (Executive Build Validation Navigation) — the "RUN
+ * VALIDATION" button below is `topAction`'s primary call to action
+ * whenever the highest-priority action is Build Intelligence's own "Build
+ * Is Failing"/"TypeScript Is Failing" (`category === 'Validation'`). It now
+ * opens the Executive Build Failure Report (the same modal
+ * ExecutiveCommandCentre's "View Build Report" button already opens,
+ * DEF-004) via `onOpenBuildFailureReport`, instead of following
+ * `topAction.href` to the generic Git & Build page — that href remains the
+ * fallback for a Validation action reached wherever this component is
+ * rendered without the report wired in.
  */
 export function MissionControl({
   slug,
@@ -44,6 +55,7 @@ export function MissionControl({
   git,
   deployment,
   onApplied,
+  onOpenBuildFailureReport,
 }: {
   slug: string
   session: DevelopmentSession
@@ -55,6 +67,7 @@ export function MissionControl({
   git?: GitIntelligence
   deployment?: DeploymentIntelligence
   onApplied: () => void
+  onOpenBuildFailureReport?: () => void
 }) {
   const { topAction, focus } = queue
   const { state, service } = useExecutionService({ slug, session, dependencies, memory, latestHandover, queue, git, deployment })
@@ -98,14 +111,24 @@ export function MissionControl({
           </div>
 
           <div className="mt-4">
-            <Link
-              href={topAction.href}
-              className={`${ACTION_BUTTON_CLASS} ${
-                topAction.category === 'Validation' ? 'bg-gradient-to-r from-rose-500 to-rose-600' : 'bg-gradient-to-r from-amber-500 to-amber-600'
-              }`}
-            >
-              {topAction.category === 'Validation' ? 'RUN VALIDATION' : 'VIEW CURRENT BLOCKERS'}
-            </Link>
+            {topAction.category === 'Validation' && onOpenBuildFailureReport ? (
+              <button
+                type="button"
+                onClick={onOpenBuildFailureReport}
+                className={`${ACTION_BUTTON_CLASS} bg-gradient-to-r from-rose-500 to-rose-600`}
+              >
+                RUN VALIDATION
+              </button>
+            ) : (
+              <Link
+                href={topAction.href}
+                className={`${ACTION_BUTTON_CLASS} ${
+                  topAction.category === 'Validation' ? 'bg-gradient-to-r from-rose-500 to-rose-600' : 'bg-gradient-to-r from-amber-500 to-amber-600'
+                }`}
+              >
+                {topAction.category === 'Validation' ? 'RUN VALIDATION' : 'VIEW CURRENT BLOCKERS'}
+              </Link>
+            )}
           </div>
         </>
       ) : (

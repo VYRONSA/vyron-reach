@@ -1,7 +1,17 @@
 import { createDevelopmentJob, getDevelopmentJob } from '../runtime/runtimeEngine'
-import { runContinuousValidation } from '../operations/continuousValidationEngine'
-import { parseClaudeReport } from '../developmentCompletionEngine'
+import { runVerification, describeVerificationFailure } from './qualityAssurance/qualityAssuranceService'
+import { prepareRelease } from './releaseManagement/releaseManagementService'
+import { captureChangedFilePaths } from '../gitDiffCapture'
+import { parseClaudeReport, splitReportItems } from '../developmentCompletionEngine'
 import type { ExecutionIdentity } from '../runtime/executionIdentity'
+import * as knowledgeService from '../knowledge/knowledgeService'
+import { refreshEngineeringContextIfNeeded } from './liveKnowledgeRefresh'
+import { runAssessment } from './assessment/assessmentService'
+import { assignWorkerRole } from './workforce/taskAssignment'
+import { getWorkerRoleConfig } from './workforce/workerRoles'
+import { createWorkforceTask, attachRuntimeJobId, recordWorkforceTaskCompletion, recentWorkforceTasks } from './workforce/workforceTaskStore'
+import { buildWorkerTaskResult, validateWorkerOutput } from './workforce/workerReview'
+import { detectWorkforceConflict, resolveWorkforceConflict } from './workforce/conflictResolution'
 import { getGitIntelligence } from '../gitIntelligence'
 import { acquireLoopOwnership, releaseLoopOwnership } from './directorLock'
 import { getExecutionSnapshot, saveExecutionSnapshot } from './executionSnapshotStore'
@@ -14,12 +24,14 @@ import {
   completeBatchInSnapshot,
 } from './serverPlanningState'
 import { buildServerDevelopmentContext, buildServerAutonomousPrompt } from './serverContextBuilder'
+import { summarizeAttribution } from './engineeringIntelligence/engineeringIntelligenceService'
 import { patchDirectorStatus, getDirectorStatus, listDirectorStatuses } from './directorRuntimeStore'
 import { createInboxItem } from './engineeringInboxStore'
 import { appendDirectorHistory } from './directorHistoryStore'
 import { raiseNotification } from '../notifications/notificationService'
 import type { HandoffInput, ExecutionSnapshot } from './executionSnapshotTypes'
-import type { InterventionReasonType, InterventionSeverity } from './directorRuntimeTypes'
+import type { VerificationReport } from './qualityAssurance/qualityAssuranceTypes'
+import type { InterventionReasonType, InterventionSeverity, ProjectExecutionState } from './directorRuntimeTypes'
 import type { NotificationEventType } from '../notifications/notificationTypes'
 
 /**
@@ -65,6 +77,65 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+/**
+ * PRA-P1-022 remediation — an in-process concurrency ceiling on how many
+ * projects' loops may be actively mid-execution (inside runLoopBodyInner)
+ * at once in this server process. Before this, recoverActiveDirectorsOnStartup
+ * fired a loop for every recoverable project with no throttling, and
+ * startServerDirector/resumeServerDirector similarly fire-and-forgot per
+ * project — at scale (many projects started/recovered simultaneously),
+ * each running its own real build/typecheck verification concurrently in
+ * the same process.cwd(), this was a resource-starvation risk (CPU/
+ * memory/git-worktree contention), not a correctness bug: the
+ * loop-ownership lock (directorLock.ts) already guarantees at most one
+ * loop per PROJECT, this guarantees at most N loops TOTAL per PROCESS.
+ *
+ * A simple in-memory counter + FIFO queue, deliberately NOT a durable
+ * store: this is a live resource-usage limit for the current process,
+ * not governance state — resetting to 0 on every restart (nothing was
+ * actually running to remember) is exactly correct, and every queued
+ * waiter here is a request that hasn't started its loop yet, so there is
+ * nothing to recover if the process restarts before it's dequeued (the
+ * caller's own retry/recovery path already covers that).
+ *
+ * Configurable via VYRON_DEV_MAX_CONCURRENT_PROJECT_LOOPS for operators
+ * who need a different ceiling than the default; falls back to 5 for any
+ * unset/invalid value.
+ */
+const MAX_CONCURRENT_PROJECT_LOOPS = (() => {
+  const raw = Number(process.env.VYRON_DEV_MAX_CONCURRENT_PROJECT_LOOPS)
+  return Number.isFinite(raw) && raw > 0 ? raw : 5
+})()
+
+let activeLoopCount = 0
+const concurrencyQueue: (() => void)[] = []
+
+/** Exported for direct testing of the queueing behavior only — every real caller goes through runLoopBody, never this directly. */
+export function acquireConcurrencySlot(): Promise<void> {
+  if (activeLoopCount < MAX_CONCURRENT_PROJECT_LOOPS) {
+    activeLoopCount += 1
+    return Promise.resolve()
+  }
+  return new Promise<void>(resolve => {
+    concurrencyQueue.push(() => {
+      activeLoopCount += 1
+      resolve()
+    })
+  })
+}
+
+/** Exported for direct testing of the queueing behavior only — every real caller goes through runLoopBody, never this directly. */
+export function releaseConcurrencySlot(): void {
+  activeLoopCount -= 1
+  const next = concurrencyQueue.shift()
+  if (next) next()
+}
+
+/** Test-only introspection — never used by production code paths. */
+export function getConcurrencyStateForTests(): { active: number; queued: number; max: number } {
+  return { active: activeLoopCount, queued: concurrencyQueue.length, max: MAX_CONCURRENT_PROJECT_LOOPS }
+}
+
 type ServerIntervention = {
   reasonType: InterventionReasonType
   severity: InterventionSeverity
@@ -95,17 +166,23 @@ function findPreflightBlocker(snapshot: ExecutionSnapshot, batchId: string): Ser
   return null
 }
 
-/** "Determine if CEO intervention is required" — post-execution, from the real build/TypeScript result. Quality Gates / Risk Assessment / Multi-Agent Workforce remain browser-attended-only concepts; see "Remaining Limitations". */
-function findPostExecutionIntervention(buildStatus: string, typescriptStatus: string): ServerIntervention | null {
-  if (buildStatus === 'Failing' || typescriptStatus === 'Failing') {
-    return {
-      reasonType: 'Build Failure',
-      severity: 'Critical',
-      reason: `Build: ${buildStatus}, TypeScript: ${typescriptStatus}.`,
-      recommendedAction: 'Review the build/TypeScript output and fix the reported errors, then resolve this inbox item to resume.',
-    }
+/**
+ * "Determine if CEO intervention is required" — post-execution, from
+ * the full Autonomous Quality Assurance report (Build/TypeScript are
+ * two of its ten activities now, not the whole picture). Requirement 5
+ * — structured failure information: `reason` names every Failed
+ * activity and its summary, never a generic message; the full
+ * VerificationReport itself is what gets durably recorded separately
+ * (see runLoopBody's call to knowledgeService.recordVerification).
+ */
+function findPostExecutionIntervention(report: VerificationReport): ServerIntervention | null {
+  if (report.passed) return null
+  return {
+    reasonType: 'Quality Assurance Failure',
+    severity: 'Critical',
+    reason: describeVerificationFailure(report) ?? 'Verification failed.',
+    recommendedAction: 'Review the verification evidence and fix the reported failure(s), then resolve this inbox item to resume.',
   }
-  return null
 }
 
 async function pause(project: string, batchId: string | null, batchNumber: string | null, intervention: ServerIntervention) {
@@ -153,6 +230,7 @@ function mapReasonToEventType(reasonType: InterventionReasonType): NotificationE
     case 'Build Failure':
     case 'Deployment Approval':
     case 'Approval Required':
+    case 'Worker Review Required':
     default:
       return 'CEO Approval Required'
   }
@@ -176,8 +254,31 @@ function mapReasonToEventType(reasonType: InterventionReasonType): NotificationE
  * (e.g. a later "Planning" write silently clobbering an earlier, already
  * genuinely-paused "Blocked" status) even though only one of them ever
  * actually got to run the loop itself.
+ *
+ * PRA-P1-022 remediation: wraps runLoopBodyInner (the actual iteration
+ * logic, unchanged below) in a global, in-process concurrency ceiling —
+ * see acquireConcurrencySlot/releaseConcurrencySlot just above. Every one
+ * of this function's three callers (runServerLoop's recovery path,
+ * startServerDirector, resumeServerDirector) already funnels through
+ * here, so this is the single place that needs to enforce the ceiling
+ * rather than each call site duplicating it.
  */
-async function runLoopBody(project: string): Promise<void> {
+async function runLoopBody(project: string, loopOptions: { forceContextRefresh?: boolean } = {}): Promise<void> {
+  await acquireConcurrencySlot()
+  try {
+    await runLoopBodyInner(project, loopOptions)
+  } finally {
+    releaseConcurrencySlot()
+  }
+}
+
+async function runLoopBodyInner(project: string, loopOptions: { forceContextRefresh?: boolean } = {}): Promise<void> {
+  // Only the very first iteration of THIS loopBody invocation may be a
+  // forced (recovery) refresh — every iteration after that goes back to
+  // ordinary comparison-based behavior, reading whatever lastKnownVersions
+  // that first iteration just recorded.
+  let forceContextRefresh = loopOptions.forceContextRefresh ?? false
+
   for (;;) {
       const snapshot = getExecutionSnapshot(project)
       if (!snapshot) {
@@ -194,10 +295,66 @@ async function runLoopBody(project: string): Promise<void> {
       const status = getDirectorStatus(project)
       if (status.state === 'Cancelled' || status.state === 'Waiting for CEO' || status.state === 'Blocked') return
 
-      const enforced = enforceSnapshotPlanningState(snapshot)
+      const planningEnforced = enforceSnapshotPlanningState(snapshot)
+
+      // ---- Live Knowledge Refresh (Version 2.0, Milestone 2.2) ----
+      // The synchronization boundary: reached here on every iteration —
+      // before a new batch begins, immediately after the previous one
+      // completes, and (since resumeServerDirector/
+      // recoverActiveDirectorsOnStartup both re-enter via runLoopBody)
+      // after a CEO approval resume and after recovery. Never reached
+      // mid-batch. Comparison-based against this run's last-known
+      // versions, so any number of edits made while a batch was executing
+      // collapse into at most one refresh here.
+      const { snapshot: enforced, versions: contextVersions, refreshed } = refreshEngineeringContextIfNeeded(
+        planningEnforced,
+        status.lastKnownVersions,
+        { force: forceContextRefresh }
+      )
+      forceContextRefresh = false
       saveExecutionSnapshot(enforced)
+      if (refreshed) patchDirectorStatus(project, { lastKnownVersions: contextVersions })
+
+      // ---- Headless Engineering Assessment (Version 2.0, Milestone 2.3) ----
+      // Requested at the exact same synchronization boundary as Live
+      // Knowledge Refresh, immediately above — never mid-batch. The
+      // Assessment Service is the ONLY producer of these three values;
+      // the Director only ever copies its output onto DirectorRuntimeStatus,
+      // never interprets raw project data to derive them itself.
+      const { assessment } = runAssessment(project)
+      patchDirectorStatus(project, {
+        riskLevel: assessment.riskAssessment.overall,
+        engineeringHealth: assessment.engineeringHealth,
+        qualityGates: assessment.qualityGates,
+      })
 
       if (isProjectComplete(enforced)) {
+        // ---- Autonomous Release Management ----
+        // PRA-P1-028 remediation: prepared BEFORE the project is marked
+        // Completed below (previously the reverse). A crash between
+        // marking Completed and preparing the release used to be able to
+        // leave a Completed project with no ReleaseRequest ever created —
+        // silently, forever, since Completed is no longer Running/Planning,
+        // so recoverActiveDirectorsOnStartup would never revisit it to
+        // retry. Reordering closes that window entirely rather than
+        // needing a second reconciliation pass: real preparation only (no
+        // git/gh/vercel command runs here) — the mutating sequence is
+        // reachable exclusively from a human's Go decision (see
+        // releaseManagementService.ts). Still wrapped in try/catch so an
+        // unexpected error here degrades to a logged gap rather than an
+        // uncaught exception, and never blocks completion itself from
+        // being recorded.
+        try {
+          await prepareRelease(project)
+        } catch (err) {
+          appendDirectorHistory({
+            project,
+            event: 'Release preparation failed unexpectedly',
+            batchId: null,
+            detail: err instanceof Error ? err.message : String(err),
+          })
+        }
+
         patchDirectorStatus(project, {
           state: 'Completed',
           currentActivity: 'All batches complete',
@@ -262,9 +419,32 @@ async function runLoopBody(project: string): Promise<void> {
         waitingInboxItemId: null,
       })
 
+      // ---- Headless AI Workforce (Version 2.0 Phase 3, Milestone 3.1) ----
+      // The Director assigns work to the most appropriate worker role,
+      // informed by the Assessment Service output computed earlier this
+      // same synchronization boundary (never recomputed here — "Workers
+      // do not compute assessments," and neither does this assignment
+      // step). The resulting WorkforceTask freezes the same four version
+      // values every ExecutionIdentity already freezes, immutable for
+      // this batch's lifetime.
+      const workerAssignment = assignWorkerRole(currentBatch.objective, assessment)
+      const workerRoleConfig = getWorkerRoleConfig(workerAssignment.role)
+      const workforceTask = createWorkforceTask({
+        project,
+        phase: currentMilestone?.phase ?? 'Unknown',
+        milestoneId: currentMilestone?.id ?? null,
+        batchId: currentBatch.id,
+        requiredRole: workerAssignment.role,
+        executionContextVersion: contextVersions.executionContextVersion,
+        knowledgeVersion: contextVersions.knowledgeVersion,
+        planningVersion: contextVersions.planningVersion,
+        dnaVersion: contextVersions.dnaVersion,
+      })
+      patchDirectorStatus(project, { currentWorkerRole: workerAssignment.role })
+
       const git = getGitIntelligence()
       const context = buildServerDevelopmentContext(enforced, currentBatch, currentMilestone)
-      const prompt = buildServerAutonomousPrompt(context, currentBatch)
+      const prompt = buildServerAutonomousPrompt(context, currentBatch, workerRoleConfig)
 
       const identity: ExecutionIdentity = {
         product: enforced.projectName,
@@ -279,7 +459,14 @@ async function runLoopBody(project: string): Promise<void> {
         repositoryCommit: git.commitHash !== 'Unavailable' ? git.commitHash : null,
         runtimeJobId: null,
         ceoDecision: 'Pending',
-        knowledgeVersion: enforced.knowledgeVersion,
+        // Frozen at this iteration's synchronization boundary (the refresh
+        // check above), NOT recomputed here — Version 2.0 Milestone 2.2
+        // requires these four values stay immutable for this batch's
+        // entire lifetime, however long Claude takes to run.
+        knowledgeVersion: contextVersions.knowledgeVersion,
+        planningVersion: contextVersions.planningVersion,
+        dnaVersion: contextVersions.dnaVersion,
+        executionContextVersion: contextVersions.executionContextVersion,
         executionTimestamp: new Date().toISOString(),
       }
       patchDirectorStatus(project, { currentActivity: 'Launching Claude', currentAiTask: `Batch ${currentBatch.batchNumber}` })
@@ -294,6 +481,7 @@ async function runLoopBody(project: string): Promise<void> {
       })
 
       patchDirectorStatus(project, { currentJobId: job.id })
+      attachRuntimeJobId(workforceTask.id, job.id)
 
       const finalJob = await waitForJobTerminal(job.id)
 
@@ -308,24 +496,90 @@ async function runLoopBody(project: string): Promise<void> {
         return
       }
 
-      patchDirectorStatus(project, { currentActivity: 'Validating implementation' })
-      const validation = await runContinuousValidation(process.cwd())
-      patchDirectorStatus(project, { buildStatus: validation.buildStatus, typescriptStatus: validation.typescriptStatus })
+      // Parsed once, here — a pure function of finalJob.result with no
+      // dependency on validation having run, moved ahead of it purely so
+      // it's available to the worker-review step below without a
+      // second pass. Requirement 3's applicability decision (just below)
+      // deliberately does NOT use this report's self-reported file list
+      // — it uses the real `git diff --name-only` instead, since a
+      // worker's own prose about what it changed is not ground truth.
+      const parsed = parseClaudeReport(finalJob.result ?? '')
 
-      const intervention = findPostExecutionIntervention(validation.buildStatus, validation.typescriptStatus)
+      // ---- Autonomous Quality Assurance ----
+      // Replaces "compiles" as the bar for "good": ten possible
+      // verification activities (tests, static analysis, security
+      // scanning, ...), each a real result or an honest gap, never
+      // fabricated. See lib/dev/director/qualityAssurance/.
+      patchDirectorStatus(project, { currentActivity: 'Running quality assurance' })
+      const changedFiles = await captureChangedFilePaths(process.cwd())
+      const verification = await runVerification({ project, batchId: currentBatch.id, cwd: process.cwd(), changedFiles })
+      patchDirectorStatus(project, { buildStatus: verification.buildStatus, typescriptStatus: verification.typescriptStatus })
+
+      // Requirement 6/9 — every run becomes part of the permanent
+      // engineering record, passed or failed, and is retrievable both
+      // by future Engineering Intelligence runs and directly via
+      // knowledgeService.listVerifications.
+      knowledgeService.recordVerification({
+        project,
+        batchId: currentBatch.id,
+        milestoneId: currentMilestone?.id ?? null,
+        source: 'Headless',
+        passed: verification.passed,
+        durationMs: verification.durationMs,
+        activities: verification.activities.map(a => ({ activity: a.activity, status: a.status, summary: a.summary })),
+      })
+
+      const intervention = findPostExecutionIntervention(verification)
       if (intervention) {
         await pause(project, currentBatch.id, currentBatch.batchNumber, intervention)
         return
       }
 
-      patchDirectorStatus(project, { currentActivity: 'Updating knowledge and project state' })
-      const parsed = parseClaudeReport(finalJob.result ?? '')
+      patchDirectorStatus(project, { currentActivity: 'Reviewing worker output' })
+
+      // ---- Worker review and validation (Milestone 3.1) ----
+      // "Only validated work updates Planning or Knowledge." Neither the
+      // batch-completion write below nor any Knowledge Service call runs
+      // unless the worker's output passes this gate — a Rejected result
+      // or an unresolved conflict pauses for CEO review instead, exactly
+      // like every other intervention path in this loop.
+      const workerResult = buildWorkerTaskResult(workforceTask.id, workerAssignment.role, parsed)
+      recordWorkforceTaskCompletion(workforceTask.id, workerResult.filesChanged)
+
+      const reviewOutcome = validateWorkerOutput(workerResult, verification.buildStatus, verification.typescriptStatus)
+
+      const recentTasks = recentWorkforceTasks(project, 20)
+      const conflict = detectWorkforceConflict(
+        { ...workforceTask, filesChanged: workerResult.filesChanged },
+        workerResult.filesChanged,
+        recentTasks
+      )
+      const resolvedConflict = conflict ? resolveWorkforceConflict(conflict, assessment) : null
+      const conflictBlocks = resolvedConflict ? resolvedConflict.resolution.includes('siding with the blocking position') : false
+
+      if (reviewOutcome.decision === 'Rejected' || conflictBlocks) {
+        const reasons = [...reviewOutcome.reasons]
+        if (resolvedConflict) reasons.push(`${resolvedConflict.description} ${resolvedConflict.resolution}`)
+        await pause(project, currentBatch.id, currentBatch.batchNumber, {
+          reasonType: 'Worker Review Required',
+          severity: conflictBlocks ? 'High' : 'Medium',
+          reason: reasons.join(' '),
+          recommendedAction: 'Review the worker task result and either address the issue manually or resolve this inbox item to retry automatically.',
+        })
+        return
+      }
 
       const previousMilestoneStatus = currentMilestone?.status ?? null
       const previousPhase = currentMilestone?.phase ?? null
       const wasPhaseCompleteBefore = previousPhase ? isPhaseComplete(enforced, previousPhase) : false
 
       const advanced = completeBatchInSnapshot(enforced, currentBatch.id)
+      // The snapshot's own `completions` array is now a lightweight runtime
+      // cache ONLY — it exists purely so estimateCompletion() below can read
+      // back each recent batch's job duration for this run's ETA. It is no
+      // longer the historical record: the Knowledge Service calls just below
+      // are. Losing this array (or the whole snapshot) loses nothing
+      // permanent — see executionSnapshotTypes.ts.
       const completionRecord = {
         batchId: currentBatch.id,
         batchNumber: currentBatch.batchNumber,
@@ -346,9 +600,92 @@ async function runLoopBody(project: string): Promise<void> {
         detail: `Runtime job ${finalJob.id}.`,
       })
 
+      // ---- Server Knowledge Engine (Version 2.0, Milestone 2.1) ----
+      // The Knowledge Service is the ONLY writer for engineering history —
+      // every permanent record for this batch's completion is recorded
+      // here, replacing what used to live only in the snapshot's
+      // completions array. This is what closes the "headless completions
+      // bypass the Knowledge Update Engine" gap: the browser-attended path
+      // (knowledgeUpdateEngine.ts) and this headless path now both produce
+      // durable Decisions/Technical Debt/Risks/Journal/Handover records,
+      // just through the shared Knowledge Service instead of two separate
+      // implementations.
+      const commonKnowledgeFields = {
+        project,
+        batchId: currentBatch.id,
+        milestoneId: currentMilestone?.id ?? null,
+        runtimeJobId: finalJob.id,
+        source: 'Headless' as const,
+      }
+
+      knowledgeService.recordBatchCompletion({
+        ...commonKnowledgeFields,
+        batchId: currentBatch.id,
+        batchNumber: currentBatch.batchNumber,
+        objective: currentBatch.objective,
+        summary: parsed.executiveSummary || 'No executive summary reported.',
+      })
+
+      // Engineering Intelligence attribution (requirement 6) — which
+      // organisational-knowledge sources actually informed this batch's
+      // prompt, and which categories had nothing relevant (requirement 7),
+      // recorded durably against the exact record that already represents
+      // this batch's AI output.
+      const attribution = context.engineeringIntelligence
+        ? summarizeAttribution(context.engineeringIntelligence)
+        : { sourceRefs: [], gapSourceTypes: [] }
+
+      knowledgeService.recordHandover({
+        ...commonKnowledgeFields,
+        phase: currentMilestone?.phase ?? 'Unknown',
+        objective: currentBatch.objective,
+        executiveSummary: parsed.executiveSummary,
+        filesCreated: parsed.filesCreated,
+        filesModified: parsed.filesModified,
+        filesDeleted: parsed.filesDeleted,
+        buildStatus: parsed.buildStatus,
+        typescriptStatus: parsed.typescriptStatus,
+        gitDiffSummary: git.commitHash !== 'Unavailable' ? git.commitHash : null,
+        knowledgeSourcesConsulted: attribution.sourceRefs,
+        knowledgeGapSources: attribution.gapSourceTypes,
+      })
+
+      for (const decision of splitReportItems(parsed.architectureDecisions)) {
+        knowledgeService.recordArchitectureDecision({ ...commonKnowledgeFields, decision, reason: 'Recorded automatically from an execution report.' })
+      }
+      for (const title of splitReportItems(parsed.technicalDebtIdentified)) {
+        knowledgeService.recordTechnicalDebt({
+          ...commonKnowledgeFields,
+          title,
+          description: `Identified during automated execution of ${currentBatch.objective || 'a development job'}.`,
+          priority: 'Medium',
+        })
+      }
+      for (const title of splitReportItems(parsed.risksIdentified)) {
+        knowledgeService.recordRisk({
+          ...commonKnowledgeFields,
+          title,
+          description: `Identified during automated execution of ${currentBatch.objective || 'a development job'}.`,
+          severity: 'Medium',
+        })
+      }
+      knowledgeService.appendJournalEntry({
+        ...commonKnowledgeFields,
+        summary: parsed.executiveSummary,
+        wins: parsed.recommendations,
+        problems: parsed.risksIdentified,
+        nextActions: parsed.nextSuggestedBatch,
+      })
+
       const newMilestone = currentMilestone ? withCompletion.milestones.find(m => m.id === currentMilestone.id) : null
       if (newMilestone && newMilestone.status === 'Complete' && previousMilestoneStatus !== 'Complete') {
         appendDirectorHistory({ project, event: `Milestone "${newMilestone.title}" completed`, batchId: currentBatch.id, detail: '' })
+        knowledgeService.recordMilestoneCompletion({
+          ...commonKnowledgeFields,
+          milestoneId: newMilestone.id,
+          milestoneTitle: newMilestone.title,
+          phase: previousPhase ?? 'Unknown',
+        })
         await raiseNotification({
           type: 'Milestone Completed',
           project,
@@ -381,12 +718,37 @@ async function runLoopBody(project: string): Promise<void> {
   }
 }
 
-/** Acquires this project's loop-ownership lock and runs the loop body under it, releasing it however the loop ends (completed, paused, blocked, cancelled, or an unexpected throw). Used wherever nothing has acquired the lock yet — recovery and, historically, direct entry; startServerDirector/resumeServerDirector now acquire it themselves first so their own setup writes are covered too (see runLoopBody's doc comment). */
+/**
+ * Acquires this project's loop-ownership lock and runs the loop body
+ * under it, releasing it however the loop ends (completed, paused,
+ * blocked, cancelled, or an unexpected throw). Used wherever nothing has
+ * acquired the lock yet — recovery and, historically, direct entry;
+ * startServerDirector/resumeServerDirector now acquire it themselves
+ * first so their own setup writes are covered too (see runLoopBody's doc
+ * comment). This is exclusively the recovery/direct-entry path (never
+ * called by startServerDirector/resumeServerDirector), which is exactly
+ * why the forced refresh below belongs here: reaching this function with
+ * a successfully-acquired lock means the recorded owner was dead — a
+ * genuine crash reclaim, not a live loop continuing — so Version 2.0
+ * Milestone 2.2's "recovery must never replay stale engineering context"
+ * is enforced by forcing the very first synchronization-boundary check
+ * inside runLoopBody to reload from the durable sources unconditionally,
+ * rather than trusting whatever versions were last recorded before the
+ * crash (which a plain comparison could mistake for "unchanged" if the
+ * crash happened to occur with nothing pending).
+ */
 async function runServerLoop(project: string): Promise<void> {
   const owner = acquireLoopOwnership(project)
   if (!owner) return // another still-alive holder already owns this project's loop — exit immediately, never start a second one
+  // This function is exclusively the recovery/direct-entry path (see its
+  // own doc comment above) — reaching here with a successfully-acquired
+  // lock always means a genuine crash reclaim. Recorded as a durable
+  // history event specifically so Version 2.0 Milestone 2.3's Risk
+  // Assessment "Recovery Frequency" factor has a real, countable signal
+  // to read instead of fabricating one.
+  appendDirectorHistory({ project, event: 'Recovered from crash', batchId: null, detail: '' })
   try {
-    await runLoopBody(project)
+    await runLoopBody(project, { forceContextRefresh: true })
   } finally {
     releaseLoopOwnership(project, owner)
   }
@@ -435,7 +797,6 @@ export function startServerDirector(handoff: HandoffInput): void {
       const now = new Date().toISOString()
       const snapshot: ExecutionSnapshot = {
         ...handoff,
-        knowledgeVersion: `debt:${handoff.technicalDebt.length}|risk:${handoff.openRisks.length}|dec:${handoff.decisions.length}@${now}`,
         completions: [],
         handedOffAt: now,
       }
@@ -448,6 +809,11 @@ export function startServerDirector(handoff: HandoffInput): void {
         error: null,
         totalBatches: handoff.batches.length,
         completedBatches: handoff.batches.filter(b => b.status === 'Complete').length,
+        // A brand-new run has no continuity with any previous run's
+        // engineering context — force the first synchronization boundary
+        // inside runLoopBody to load fresh rather than possibly (and
+        // coincidentally) matching a stale value left over from before.
+        lastKnownVersions: null,
       })
       appendDirectorHistory({ project: handoff.project, event: 'Autonomous development started', batchId: null, detail: 'CEO pressed Start Development.' })
       await runLoopBody(handoff.project)
@@ -511,7 +877,43 @@ export function resumeServerDirector(project: string): void {
   })()
 }
 
+const TERMINAL_DIRECTOR_STATES: ReadonlySet<ProjectExecutionState> = new Set(['Completed', 'Cancelled'])
+
+/**
+ * CB-001 remediation (PRA-P1-020) — cancelServerDirector previously
+ * mutated state unconditionally, with no check that the project wasn't
+ * already Completed: a single call could silently regress a finished
+ * project back to Cancelled, discarding completedAt/final state. Two
+ * genuinely different terminal outcomes exist (Completed, Cancelled), so
+ * "terminal" alone isn't a uniform reject — an already-Cancelled project
+ * is treated as an idempotent no-op (repeating the same cancellation
+ * intent should never error), while an already-Completed project is a
+ * real conflict (cancelling it would produce a DIFFERENT terminal outcome
+ * than the one already recorded) and is rejected with an explicit error
+ * rather than silently mutated.
+ */
+export class DirectorLifecycleError extends Error {
+  constructor(
+    public readonly project: string,
+    public readonly actualState: ProjectExecutionState
+  ) {
+    super(`Director for '${project}' is already '${actualState}' — cancelling would discard that outcome and cannot be done silently.`)
+    this.name = 'DirectorLifecycleError'
+  }
+}
+
+export function describeDirectorError(err: unknown): { status: number; error: string } | null {
+  if (err instanceof DirectorLifecycleError) return { status: 409, error: err.message }
+  return null
+}
+
 export function cancelServerDirector(project: string): void {
+  const status = getDirectorStatus(project)
+  if (TERMINAL_DIRECTOR_STATES.has(status.state)) {
+    if (status.state === 'Cancelled') return // already the requested outcome — idempotent no-op, not an error
+    throw new DirectorLifecycleError(project, status.state) // Completed — a different terminal outcome, reject rather than silently overwrite it
+  }
+
   patchDirectorStatus(project, { state: 'Cancelled', currentActivity: 'Cancelled by CEO' })
   appendDirectorHistory({ project, event: 'Cancelled by CEO', batchId: null, detail: '' })
 }

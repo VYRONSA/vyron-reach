@@ -81,6 +81,8 @@ export async function computeFullAssessment(
   facts: RepositoryFacts
   dnaProfile: DNAProfileFields | null
   learningSummary: ExecutionAnalyticsSummary
+  /** PRA-P1-006: null when persist=false, or when persist succeeded. Set when persist=true and only the persist step itself failed — the already-computed `assessment` above is still returned rather than discarded, so a transient network blip on this one step no longer forces the caller to redo the entire fs-scan + 3-fetch pipeline just to see a report it already had. */
+  persistError: string | null
 }> {
   const project = getProjectBySlug(projectSlug)
   const milestones = milestonesForProject(projectSlug)
@@ -128,14 +130,25 @@ export async function computeFullAssessment(
     },
   })
 
+  // PRA-P1-006: the persist step is best-effort from the caller's point of
+  // view — a failure here is caught and reported back as data
+  // (persistError), never thrown, so it can never discard the `assessment`
+  // already computed above. Everything before this point (the three
+  // fetches, buildEngineeringAssessment) still throws normally on failure,
+  // since there genuinely is no report to show in that case.
+  let persistError: string | null = null
   if (persist) {
-    const snapshot = buildAssessmentSnapshot(assessment)
-    await fetchJson('/api/dev/assessment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(snapshot),
-    })
+    try {
+      const snapshot = buildAssessmentSnapshot(assessment)
+      await fetchJson('/api/dev/assessment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(snapshot),
+      })
+    } catch (err) {
+      persistError = err instanceof Error ? err.message : 'Failed to save this assessment to history.'
+    }
   }
 
-  return { assessment, executiveReport, jobs, facts, dnaProfile, learningSummary }
+  return { assessment, executiveReport, jobs, facts, dnaProfile, learningSummary, persistError }
 }

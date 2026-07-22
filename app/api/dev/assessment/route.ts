@@ -107,8 +107,12 @@ export async function POST(request: NextRequest) {
   }
 
   const previous = latestAssessmentSnapshot(snapshot.projectSlug)
-  appendAssessmentSnapshot(snapshot)
+  // PRA-P1-005: distinguish "this id was actually new" from "this id was
+  // already recorded" instead of always answering 201 either way — a
+  // caller (or its own retry logic) can now tell a genuine first-time
+  // persist apart from a no-op replay.
+  const written = appendAssessmentSnapshot(snapshot)
   const trend = compareAssessmentSnapshots(snapshot, previous?.id === snapshot.id ? null : previous)
 
-  return NextResponse.json({ snapshot, trend }, { status: 201 })
+  return NextResponse.json({ snapshot, trend, written }, { status: written ? 201 : 200 })
 }

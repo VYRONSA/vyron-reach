@@ -117,10 +117,25 @@ export function buildEngineeringAssessment(input: AssessmentInput): AssessmentRe
   }
 }
 
-/** The historical record for one run — everything Learning needs for trend analysis, nothing more. */
+/**
+ * The historical record for one run — everything Learning needs for
+ * trend analysis, nothing more.
+ *
+ * PRA-P1-005 remediation: the id used to be millisecond-resolution only
+ * (`assessment_{slug}_{Date.parse(generatedAt)}`), so two genuinely
+ * distinct assessment runs completing within the same millisecond would
+ * collide — appendAssessmentSnapshot's idempotent-on-id dedup would then
+ * silently drop the second run's real data. The random suffix (the
+ * global Web Crypto `crypto.randomUUID()`, not `node:crypto` — this
+ * module is imported by a 'use client' panel, see assessmentModels.ts's
+ * identical constraint) makes two distinct calls collide only if they
+ * also happen to draw the same random value, which is not a realistic
+ * risk. Same generatedAt + same random suffix still dedups correctly for
+ * a genuinely retried request building from the exact same report object.
+ */
 export function buildAssessmentSnapshot(report: AssessmentReport): AssessmentSnapshot {
   return {
-    id: `assessment_${report.projectSlug}_${Date.parse(report.generatedAt)}`,
+    id: `assessment_${report.projectSlug}_${Date.parse(report.generatedAt)}_${crypto.randomUUID().slice(0, 8)}`,
     timestamp: report.generatedAt,
     projectSlug: report.projectSlug,
     scores: report.scores,

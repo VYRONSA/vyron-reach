@@ -2,7 +2,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { tryCreateExclusive } from '../fileLock'
 import { isProcessAlive } from '../runtime/processLiveness'
+import { getVyronDevDataDir } from '../vyronDevDataDir'
 import { recoverActiveDirectorsOnStartup } from './serverExecutionLoop'
+import { publish } from '../events/eventBus'
 
 /**
  * The Recovery Bootstrap — guarantees recoverActiveDirectorsOnStartup()
@@ -22,12 +24,19 @@ import { recoverActiveDirectorsOnStartup } from './serverExecutionLoop'
  * call happens.
  */
 
-const STORE_DIR = path.join(process.cwd(), '.vyron-dev')
-const LOCK_FILE = path.join(STORE_DIR, 'recovery-bootstrap.lock')
-const RECORD_FILE = path.join(STORE_DIR, 'recovery-bootstrap.json')
+function storeDir(): string {
+  return getVyronDevDataDir()
+}
+function lockFile(): string {
+  return path.join(storeDir(), 'recovery-bootstrap.lock')
+}
+function recordFile(): string {
+  return path.join(storeDir(), 'recovery-bootstrap.json')
+}
 
 function ensureDir(): void {
-  if (!fs.existsSync(STORE_DIR)) fs.mkdirSync(STORE_DIR, { recursive: true })
+  const dir = storeDir()
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 }
 
 /**
@@ -41,22 +50,23 @@ function ensureDir(): void {
  */
 function acquireBootstrapLock(): boolean {
   ensureDir()
+  const file = lockFile()
   const payload = JSON.stringify({ pid: process.pid, acquiredAt: new Date().toISOString() })
-  if (tryCreateExclusive(LOCK_FILE, payload)) return true
+  if (tryCreateExclusive(file, payload)) return true
 
   try {
-    const existing = JSON.parse(fs.readFileSync(LOCK_FILE, 'utf-8')) as { pid: number }
+    const existing = JSON.parse(fs.readFileSync(file, 'utf-8')) as { pid: number }
     if (isProcessAlive(existing.pid)) return false // a live process is already running bootstrap
-    fs.unlinkSync(LOCK_FILE)
+    fs.unlinkSync(file)
   } catch {
     // vanished or unreadable between the failed create and this check — fall through and retry
   }
-  return tryCreateExclusive(LOCK_FILE, payload)
+  return tryCreateExclusive(file, payload)
 }
 
 function releaseBootstrapLock(): void {
   try {
-    fs.unlinkSync(LOCK_FILE)
+    fs.unlinkSync(lockFile())
   } catch {
     // already gone — fine
   }
@@ -65,7 +75,7 @@ function releaseBootstrapLock(): void {
 /** A durable, inspectable record that startup recovery ran — observability only, never consulted to decide whether to run again (recovery must run fresh on every single startup, not just the first one ever). */
 function recordStartupRecovery(): void {
   ensureDir()
-  fs.writeFileSync(RECORD_FILE, JSON.stringify({ pid: process.pid, completedAt: new Date().toISOString() }, null, 2), 'utf-8')
+  fs.writeFileSync(recordFile(), JSON.stringify({ pid: process.pid, completedAt: new Date().toISOString() }, null, 2), 'utf-8')
 }
 
 /**
@@ -84,9 +94,11 @@ export function runRecoveryBootstrap(): Promise<void> {
 
   bootstrapPromise = (async () => {
     if (!acquireBootstrapLock()) return // another concurrent caller already won it
+    const startedAt = Date.now()
     try {
       await recoverActiveDirectorsOnStartup()
       recordStartupRecovery()
+      publish({ category: 'Recovery', project: '*', type: 'director-recovery-completed', payload: { durationMs: Date.now() - startedAt } })
     } finally {
       releaseBootstrapLock()
     }

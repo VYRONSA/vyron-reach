@@ -32,13 +32,20 @@ export function EngineeringAssessmentPanel({ projectSlug, git, build }: { projec
   const [report, setReport] = useState<AssessmentReport | null>(null)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // PRA-P1-006: distinct from `error` above — a persist failure is
+  // non-blocking (the report itself is still fully computed and shown),
+  // while `error` still means "the assessment computation itself failed,
+  // nothing to show."
+  const [persistWarning, setPersistWarning] = useState<string | null>(null)
 
   const runAssessment = async () => {
     setRunning(true)
     setError(null)
+    setPersistWarning(null)
     try {
-      const { assessment } = await computeFullAssessment(projectSlug, git, build, true)
+      const { assessment, persistError } = await computeFullAssessment(projectSlug, git, build, true)
       setReport(assessment)
+      setPersistWarning(persistError)
       // Director Integration: shaped and available for whatever calls the Director next — this panel doesn't act on it.
       buildDirectorAssessmentInput(assessment)
     } catch (err) {
@@ -74,6 +81,11 @@ export function EngineeringAssessmentPanel({ projectSlug, git, build }: { projec
       </div>
 
       {error ? <p className="mt-2 text-xs text-rose-500 dark:text-rose-400">{error}</p> : null}
+      {persistWarning ? (
+        <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+          Report generated below, but saving it to history failed: {persistWarning}
+        </p>
+      ) : null}
 
       {report ? (
         <div className="mt-4 space-y-4">

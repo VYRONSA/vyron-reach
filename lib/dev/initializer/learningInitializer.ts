@@ -1,5 +1,4 @@
-import fs from 'node:fs'
-import path from 'node:path'
+import { updateJsonStore } from '../director/fileJsonStore'
 import { readDNAProfile, readExecutionRecords, readMemoryEntries } from '../learning/learningStorage'
 import type { InitializerStepResult, LearningSubsystemStatus } from './initializerTypes'
 
@@ -26,27 +25,14 @@ const SUBSYSTEMS = [
   'Architecture Knowledge',
 ] as const
 
-const STORE_DIR = path.join(process.cwd(), '.vyron-dev')
-const MARKER_FILE = path.join(STORE_DIR, 'learning-initialized.json')
-
-function ensureFile(): void {
-  if (!fs.existsSync(STORE_DIR)) fs.mkdirSync(STORE_DIR, { recursive: true })
-  if (!fs.existsSync(MARKER_FILE)) fs.writeFileSync(MARKER_FILE, '{}', 'utf-8')
-}
-
-function readMarkers(): Record<string, string> {
-  ensureFile()
-  try {
-    return JSON.parse(fs.readFileSync(MARKER_FILE, 'utf-8')) as Record<string, string>
-  } catch {
-    return {}
-  }
-}
-
-function writeMarkers(markers: Record<string, string>): void {
-  ensureFile()
-  fs.writeFileSync(MARKER_FILE, JSON.stringify(markers, null, 2), 'utf-8')
-}
+// Wave 4 (Unlocked Stores) remediation — previously read-check-write
+// against raw fs with no lock spanning the three steps: two concurrent
+// initializeLearning calls for the same productSlug could both pass the
+// "not yet initialized" check and both touch every subsystem and write a
+// marker. Now the whole check-and-set runs inside fileJsonStore.ts's
+// updateJsonStore, under one real file lock — on-disk format (a
+// Record<productSlug, initializedAtISOString> object) is unchanged.
+const MARKER_FILE = 'learning-initialized.json'
 
 export function learningSubsystemStatuses(productSlug: string): LearningSubsystemStatus[] {
   const executions = readExecutionRecords(productSlug)
@@ -67,18 +53,20 @@ export function learningSubsystemStatuses(productSlug: string): LearningSubsyste
 }
 
 export function initializeLearning(productSlug: string): InitializerStepResult {
-  const markers = readMarkers()
-  if (markers[productSlug]) {
-    return { step: 'Learning System', created: [], skipped: [`Already initialized ${markers[productSlug]}`] }
-  }
+  let result: InitializerStepResult
+  updateJsonStore<Record<string, string>>(MARKER_FILE, {}, current => {
+    const existing = current[productSlug]
+    if (existing) {
+      result = { step: 'Learning System', created: [], skipped: [`Already initialized ${existing}`] }
+      return current
+    }
 
-  // Touches every subsystem's underlying store once, lazily creating the
-  // shared execution/DNA/memory files if this is the very first product.
-  learningSubsystemStatuses(productSlug)
+    // Touches every subsystem's underlying store once, lazily creating the
+    // shared execution/DNA/memory files if this is the very first product.
+    learningSubsystemStatuses(productSlug)
 
-  const now = new Date().toISOString()
-  markers[productSlug] = now
-  writeMarkers(markers)
-
-  return { step: 'Learning System', created: [...SUBSYSTEMS], skipped: [] }
+    result = { step: 'Learning System', created: [...SUBSYSTEMS], skipped: [] }
+    return { ...current, [productSlug]: new Date().toISOString() }
+  })
+  return result!
 }

@@ -19,8 +19,25 @@ const PRIORITY_TONE: Record<ActionPriority, 'danger' | 'warning' | 'info' | 'neu
  * default — everything Mission Control isn't already showing as the one
  * primary action. Purely presentational over an already-computed
  * ExecutiveActionQueue.actions list.
+ *
+ * PRAT-1 DEF-001 (Executive Build Validation Navigation) — a Build
+ * Intelligence action (`sourceEngine === 'Build Intelligence'`, i.e. "Build
+ * Is Failing" / "TypeScript Is Failing") opens the Executive Build Failure
+ * Report (the same modal ExecutiveCommandCentre's own "View Build Report"
+ * button already opens, DEF-004) via `onOpenBuildFailureReport`, instead of
+ * following `action.href` to the generic Git & Build page — that href is a
+ * fallback for other build-related actions that predate the report and
+ * are not equipped with it wherever this panel is rendered without one.
+ * Every other action (Git, Deployment, Planning, ...) is unaffected and
+ * still navigates via its own `href` exactly as before.
  */
-export function ExecutiveActionQueuePanel({ actions }: { actions: ExecutiveAction[] }) {
+export function ExecutiveActionQueuePanel({
+  actions,
+  onOpenBuildFailureReport,
+}: {
+  actions: ExecutiveAction[]
+  onOpenBuildFailureReport?: () => void
+}) {
   const [expanded, setExpanded] = useState(false)
   const top = actions.slice(0, 10)
   const groups = PRIORITY_ORDER.map(priority => ({ priority, items: top.filter(a => a.priority === priority) })).filter(
@@ -50,18 +67,36 @@ export function ExecutiveActionQueuePanel({ actions }: { actions: ExecutiveActio
                   </span>
                 </div>
                 <ul className="space-y-1.5">
-                  {group.items.map((action, i) => (
-                    <li key={i} className="rounded-lg border border-[var(--dev-border)] px-3 py-2">
-                      <Link
-                        href={action.href}
-                        className="flex items-center justify-between gap-2 text-sm text-[var(--dev-text)] hover:text-[var(--dev-accent)]"
-                      >
+                  {group.items.map((action, i) => {
+                    const opensBuildFailureReport = action.sourceEngine === 'Build Intelligence' && Boolean(onOpenBuildFailureReport)
+                    const content = (
+                      <>
                         <span className="truncate">{action.title}</span>
                         <span className="shrink-0 text-[11px] text-[var(--dev-text-faint)]">{action.category}</span>
-                      </Link>
-                      <p className="mt-0.5 truncate text-xs text-[var(--dev-text-faint)]">{action.recommendedAction}</p>
-                    </li>
-                  ))}
+                      </>
+                    )
+                    return (
+                      <li key={i} className="rounded-lg border border-[var(--dev-border)] px-3 py-2">
+                        {opensBuildFailureReport ? (
+                          <button
+                            type="button"
+                            onClick={onOpenBuildFailureReport}
+                            className="flex w-full items-center justify-between gap-2 text-left text-sm text-[var(--dev-text)] hover:text-[var(--dev-accent)]"
+                          >
+                            {content}
+                          </button>
+                        ) : (
+                          <Link
+                            href={action.href}
+                            className="flex items-center justify-between gap-2 text-sm text-[var(--dev-text)] hover:text-[var(--dev-accent)]"
+                          >
+                            {content}
+                          </Link>
+                        )}
+                        <p className="mt-0.5 truncate text-xs text-[var(--dev-text-faint)]">{action.recommendedAction}</p>
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             ))

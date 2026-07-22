@@ -144,6 +144,10 @@ export type PlanningHistoryRecord = {
   projectSlug: string
   plan: EngineeringPlan
   approvalResult: ApprovalStatus | null
+  /** PRA-P1-009: who recorded approvalResult, populated from currentDevActor() at decision time — null until a decision is actually recorded, mirroring ReleaseControlDecision's/RiskGateDecision's attribution. */
+  decidedBy: string | null
+  /** PRA-P1-009: when approvalResult was recorded — distinct from `timestamp` above, which reflects plan generation, not the approval decision. */
+  decidedAt: string | null
   executionResult: 'Succeeded' | 'Failed' | 'NotExecuted'
   actualDurationHours: number | null
   success: boolean | null

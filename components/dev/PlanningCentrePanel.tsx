@@ -23,7 +23,9 @@ import {
   buildPlanningHistoryRecord,
 } from '@/lib/dev/planning/planningEngine'
 import type { EngineeringPlan, PlanningHistoryRecord } from '@/lib/dev/planning/planningTypes'
+import { buildExecutiveValidationReport } from '@/lib/dev/planning/executiveValidationTranslator'
 import { DevBadge, DevCard, DevCardHeader, DevSectionLabel } from './ui'
+import { ExecutiveValidationReportModal } from './ExecutiveValidationReportModal'
 
 async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
   const res = await fetch(input, init)
@@ -87,6 +89,7 @@ export function PlanningCentrePanel({
   const [running, setRunning] = useState(false)
   const [deciding, setDeciding] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showValidationReport, setShowValidationReport] = useState(false)
 
   const generatePlan = async () => {
     setRunning(true)
@@ -146,14 +149,22 @@ export function PlanningCentrePanel({
     setDeciding(true)
     setError(null)
     try {
-      const decided = applyHumanApprovalDecision(plan, decision)
-      setPlan(decided)
-      await fetchJson('/api/dev/planning', {
+      // PRA-P1-008: the server re-derives this decision itself (via the same
+      // applyHumanApprovalDecision this optimistic preview uses) rather than
+      // trusting whatever approvalStatus this client sends — this is only a
+      // preview until the response comes back, and the server's returned
+      // record (not this local computation) is what's actually kept.
+      setPlan(applyHumanApprovalDecision(plan, decision))
+      const { record } = await fetchJson<{ record: PlanningHistoryRecord }>('/api/dev/planning', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: historyRecordId, approvalResult: decided.approvalStatus, approvalStatus: decided.approvalStatus }),
+        body: JSON.stringify({ id: historyRecordId, decision }),
       })
+      setPlan(record.plan)
     } catch (err) {
+      // Roll back the optimistic preview — the server rejected the decision
+      // (e.g. the plan wasn't actually Director Reviewed), so it never happened.
+      setPlan(plan)
       setError(err instanceof Error ? err.message : 'Failed to record the approval decision.')
     } finally {
       setDeciding(false)
@@ -201,7 +212,16 @@ export function PlanningCentrePanel({
 
           {!plan.validation.valid ? (
             <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-3">
-              <DevSectionLabel>Validation Issues</DevSectionLabel>
+              <div className="flex items-center justify-between gap-3">
+                <DevSectionLabel>Validation Issues</DevSectionLabel>
+                <button
+                  type="button"
+                  onClick={() => setShowValidationReport(true)}
+                  className="rounded-md border border-rose-500/30 px-2 py-1 text-[11px] font-medium text-rose-500 transition-colors hover:bg-rose-500/10 dark:text-rose-400"
+                >
+                  View Details
+                </button>
+              </div>
               <ul className="mt-1 space-y-1">
                 {plan.validation.issues.map((issue, i) => (
                   <li key={i} className="text-xs text-rose-500 dark:text-rose-400">
@@ -210,6 +230,13 @@ export function PlanningCentrePanel({
                 ))}
               </ul>
             </div>
+          ) : null}
+
+          {showValidationReport ? (
+            <ExecutiveValidationReportModal
+              explanations={buildExecutiveValidationReport(plan)}
+              onClose={() => setShowValidationReport(false)}
+            />
           ) : null}
 
           {plan.directorReviewNote ? (

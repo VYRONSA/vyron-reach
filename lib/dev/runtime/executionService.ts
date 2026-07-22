@@ -7,7 +7,7 @@ import type { DeploymentIntelligence } from '../deploymentIntelligence'
 import { getHandovers, type Handover } from '../handoverStorage'
 import type { DevelopmentJob } from './runtimeTypes'
 import { buildDevelopmentContext } from './runtimeContextBuilder'
-import { buildExecutionIdentity, computeKnowledgeVersion } from './executionIdentity'
+import { buildExecutionIdentity } from './executionIdentity'
 import { planNextDevelopmentTask, type PlannedTask } from './developmentPlanningEngine'
 import type { GeneratedPrompt } from '../promptIntelligenceEngine'
 import { completeDevelopmentCycle, parseClaudeReport } from '../developmentCompletionEngine'
@@ -294,10 +294,25 @@ export function createExecutionService(deps: ExecutionServiceDeps) {
         return
       }
 
+      // The unified version calculations (lib/dev/director/engineeringContextVersion.ts,
+      // lib/dev/knowledge/knowledgeVersion.ts) are server-only (read durable
+      // Planning/Knowledge/DNA state directly off disk) — fetched here
+      // rather than computed in the browser, so this path and the headless
+      // server loop always consume the exact same calculations.
+      const contextVersions = await fetchJson<{
+        executionContextVersion: string
+        knowledgeVersion: string
+        planningVersion: number
+        dnaVersion: string
+      }>(`/api/dev/director/${encodeURIComponent(deps.slug)}/context-versions`)
+
       const executionIdentity = buildExecutionIdentity(deps.session, {
         git: deps.git,
         ceoDecision: 'Pending',
-        knowledgeVersion: computeKnowledgeVersion(knowledge),
+        knowledgeVersion: contextVersions.knowledgeVersion,
+        planningVersion: contextVersions.planningVersion,
+        dnaVersion: contextVersions.dnaVersion,
+        executionContextVersion: contextVersions.executionContextVersion,
       })
 
       const { job: created } = await fetchJson<{ job: DevelopmentJob }>('/api/dev/runtime/jobs', {

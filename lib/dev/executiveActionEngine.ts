@@ -55,7 +55,17 @@ const IMPACT: Record<ActionPriority, string> = {
   Low: 'Minor — safe to defer.',
 }
 
-function buildValidationActions(session: DevelopmentSession): ExecutiveAction[] {
+/**
+ * Exported for direct unit testing (PRAT-1 DEF-001 — Executive Build
+ * Validation Navigation) — `category: 'Validation'` and
+ * `sourceEngine: 'Build Intelligence'` are the exact, stable signal
+ * components/dev/MissionControl.tsx and ExecutiveActionQueuePanel.tsx key
+ * off to open the Executive Build Failure Report (DEF-004) instead of
+ * following `href` to the generic Git & Build page; this test guards that
+ * contract against silently drifting. getExecutiveActions remains the only
+ * production caller.
+ */
+export function buildValidationActions(session: DevelopmentSession): ExecutiveAction[] {
   const actions: ExecutiveAction[] = []
   if (session.buildStatus === 'Failing') {
     actions.push({

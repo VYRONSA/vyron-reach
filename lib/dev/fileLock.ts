@@ -27,11 +27,37 @@ export function tryCreateExclusive(file: string, contents: string): boolean {
   }
 }
 
-/** Write-then-rename so a reader never observes a partially-written file, even if the process is killed mid-write — `rename` on the same filesystem is atomic. */
+const RENAME_RETRY_ATTEMPTS = 40
+const RENAME_RETRY_DELAY_MS = 10
+
+/**
+ * Write-then-rename so a reader never observes a partially-written file,
+ * even if the process is killed mid-write — `rename` on the same
+ * filesystem is atomic. On Windows specifically, `rename` onto an existing
+ * destination can fail transiently with EPERM/EBUSY if another process
+ * (an antivirus real-time scanner, a search indexer, or another reader's
+ * brief file handle) has the destination open at that exact instant — not
+ * a real conflict, since this app's own writers are already serialized by
+ * withFileLock. A short bounded retry absorbs that transient OS-level
+ * contention instead of surfacing it as a write failure.
+ */
 export function atomicWriteFileSync(file: string, contents: string): void {
   const tmp = `${file}.tmp-${process.pid}-${process.hrtime.bigint()}`
   fs.writeFileSync(tmp, contents, 'utf-8')
-  fs.renameSync(tmp, file)
+
+  for (let attempt = 1; ; attempt++) {
+    try {
+      fs.renameSync(tmp, file)
+      return
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code
+      if (attempt >= RENAME_RETRY_ATTEMPTS || (code !== 'EPERM' && code !== 'EBUSY')) throw err
+      const until = Date.now() + RENAME_RETRY_DELAY_MS
+      while (Date.now() < until) {
+        /* deliberate short synchronous spin — same rationale as withFileLock's retry loop */
+      }
+    }
+  }
 }
 
 const LOCK_RETRY_DELAY_MS = 5

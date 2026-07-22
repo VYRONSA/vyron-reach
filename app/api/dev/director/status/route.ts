@@ -1,16 +1,26 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { isRuntimeAccessible, runtimeUnavailableResponse } from '@/lib/dev/runtime/runtimeAccess'
-import { getDirectorStatus, listDirectorStatuses, patchDirectorStatus } from '@/lib/dev/director/directorRuntimeStore'
-import type { DirectorRuntimeStatus } from '@/lib/dev/director/directorRuntimeTypes'
+import { getDirectorStatus, listDirectorStatuses } from '@/lib/dev/director/directorRuntimeStore'
 
 /**
- * The Director's live status blackboard. The autonomous orchestration loop
- * runs client-side (batches/milestones/projects only exist in
- * localStorage — see autonomousEngineeringDirector.ts's doc comment), so
- * it POSTs a patch here after every step; this GET is what makes that
- * state visible to CEO Runtime Queries and the Command Centre dashboard
- * independent of whether that browser tab is still open.
+ * Read-only view of the Director's live status blackboard — CEO Runtime
+ * Queries and the Command Centre dashboard both read through here.
+ *
+ * PRA-P1-017 remediation: this route used to also expose a POST that
+ * accepted an arbitrary `{project, patch}` body and wrote it straight to
+ * patchDirectorStatus — including `state` — with none of the guards
+ * pauseServerDirector/resumeServerDirector/startServerDirector enforce
+ * (acquireLoopOwnership in particular). A single authenticated call could
+ * set state:'Running' without the loop ever actually acquiring ownership,
+ * a self-inflicted "Running but nobody is running it" zombie only ever
+ * revisited at the next server restart. That POST handler is removed
+ * outright rather than restricted to a "safe" field allowlist: no current
+ * UI component calls it (confirmed — the only caller was
+ * lib/dev/runtime/directorClient.ts's own patchDirectorStatus wrapper,
+ * itself unused by any component and removed alongside this), and every
+ * legitimate state transition already has its own purpose-built, guarded
+ * route (handoff/pause/resume/cancel/inbox-resolve).
  */
 export async function GET(request: NextRequest) {
   if (!isRuntimeAccessible(request)) {
@@ -21,16 +31,4 @@ export async function GET(request: NextRequest) {
   const project = request.nextUrl.searchParams.get('project')
   if (!project) return NextResponse.json({ statuses: listDirectorStatuses() })
   return NextResponse.json({ status: getDirectorStatus(project) })
-}
-
-export async function POST(request: NextRequest) {
-  if (!isRuntimeAccessible(request)) {
-    const { status, error } = runtimeUnavailableResponse(request)
-    return NextResponse.json({ error }, { status })
-  }
-
-  const body = (await request.json().catch(() => null)) as { project?: string; patch?: Partial<Omit<DirectorRuntimeStatus, 'project'>> } | null
-  if (!body?.project) return NextResponse.json({ error: 'project is required' }, { status: 400 })
-
-  return NextResponse.json({ status: patchDirectorStatus(body.project, body.patch ?? {}) })
 }

@@ -1,3 +1,6 @@
+import type { EngineeringContextVersions } from './engineeringContextVersion'
+import type { QualityGateReport } from './assessment/assessmentTypes'
+
 /**
  * Shared types for the Autonomous Engineering Director — the orchestration
  * layer that owns execution end-to-end once a CEO presses Start
@@ -29,13 +32,25 @@ export type DirectorRuntimeStatus = {
   currentActivity: string
   currentAiTask: string | null
   currentJobId: string | null
+  /** Version 2.0 Phase 3 Milestone 3.1 — the Worker Role assigned to the current batch (lib/dev/director/workforce/taskAssignment.ts). Null when idle or between batches. */
+  currentWorkerRole: string | null
   /** Set only while state === 'Waiting for CEO' or 'Blocked'. */
   waitingReason: string | null
   waitingInboxItemId: string | null
   buildStatus: string
   typescriptStatus: string
+  /**
+   * Version 2.0 Milestone 2.3 — riskLevel/engineeringHealth/qualityGates
+   * are written exclusively by the Assessment Service
+   * (lib/dev/director/assessment/assessmentService.ts), requested only at
+   * synchronization boundaries (see serverExecutionLoop.ts's
+   * runLoopBody). The Director itself never computes or interprets these
+   * values — it only ever copies an EngineeringAssessment's fields onto
+   * this status.
+   */
   riskLevel: string
   engineeringHealth: string
+  qualityGates: QualityGateReport | null
   totalBatches: number
   completedBatches: number
   remainingBatches: number
@@ -46,6 +61,16 @@ export type DirectorRuntimeStatus = {
   averageBatchDurationMs: number | null
   estimatedCompletionAt: string | null
   error: string | null
+  /**
+   * Version 2.0 Milestone 2.2 (Live Knowledge Refresh) — the engineering
+   * context versions as of the last synchronization boundary this run
+   * actually refreshed at. `null` means no refresh has happened yet for
+   * this run (forces the next boundary check to always refresh — see
+   * engineeringContextVersionsEqual). Recovery explicitly resets this to
+   * `null` before resuming, so a crash can never cause stale
+   * pre-crash versions to be trusted as "unchanged."
+   */
+  lastKnownVersions: EngineeringContextVersions | null
 }
 
 export const IDLE_DIRECTOR_STATUS: Omit<DirectorRuntimeStatus, 'project'> = {
@@ -58,12 +83,14 @@ export const IDLE_DIRECTOR_STATUS: Omit<DirectorRuntimeStatus, 'project'> = {
   currentActivity: 'Not started',
   currentAiTask: null,
   currentJobId: null,
+  currentWorkerRole: null,
   waitingReason: null,
   waitingInboxItemId: null,
   buildStatus: 'Unknown',
   typescriptStatus: 'Unknown',
   riskLevel: 'Unknown',
   engineeringHealth: 'Unknown',
+  qualityGates: null,
   totalBatches: 0,
   completedBatches: 0,
   remainingBatches: 0,
@@ -73,6 +100,7 @@ export const IDLE_DIRECTOR_STATUS: Omit<DirectorRuntimeStatus, 'project'> = {
   averageBatchDurationMs: null,
   estimatedCompletionAt: null,
   error: null,
+  lastKnownVersions: null,
 }
 
 export type InterventionSeverity = 'Critical' | 'High' | 'Medium' | 'Low'
@@ -84,6 +112,18 @@ export type InterventionReasonType =
   | 'Security Review'
   | 'Deployment Approval'
   | 'Technical Debt Escalation'
+  /** Version 2.0 Phase 3 Milestone 3.1 — a worker's output failed the Director's validation gate, or two workers' file changes conflicted and the existing strategic layer's resolution (resolveAgentConflict) sided with caution rather than proceeding. */
+  | 'Worker Review Required'
+  /** Autonomous Quality Assurance — one or more verification activities (tests, static analysis, security scanning, ...) failed for this batch; see lib/dev/director/qualityAssurance/. */
+  | 'Quality Assurance Failure'
+  /** Autonomous Release Management — a release has been prepared and is awaiting an Executive's Go/Hold decision; see lib/dev/director/releaseManagement/. Dedicated rather than reusing 'Deployment Approval' so a future, genuinely distinct "should we deploy this" question still has somewhere of its own to go. */
+  | 'Release Go/Hold Required'
+  /** Autonomous Release Management — one or more release activities (git operations, pull request creation, deployment, ...) failed during an approved release's execution. */
+  | 'Release Failure'
+  /** Autonomous Operations — a post-release monitoring check detected an operational incident; see lib/dev/director/operations/. */
+  | 'Operational Incident'
+  /** Autonomous Operations — a prior known-good release is available and awaiting an Executive's rollback Go/Hold decision. */
+  | 'Rollback Go/Hold Required'
 
 export type EngineeringInboxStatus = 'Open' | 'Resolved' | 'Dismissed'
 
@@ -103,6 +143,16 @@ export type EngineeringInboxItem = {
   resolutionNote: string | null
   /** For the global Engineering Inbox's "Unread" filter — distinct from `status`, since an item can be seen (read) without yet being resolved/dismissed. */
   read: boolean
+  /**
+   * PRA-P1-019: the dedup key project-level items (batchId null — Release/
+   * Rollback/Incident governance) use instead of batchId — the id of the
+   * underlying ReleaseRequest/Incident this item is about. Optional and
+   * `null`/absent for item types that don't have (or don't yet use) such an
+   * id; createInboxItem only dedupes a project-level item when this is
+   * present, so omitting it is always backward-compatible, never a silent
+   * behavior change for a caller that hasn't been updated to pass it.
+   */
+  sourceRef?: string | null
 }
 
 export type DirectorHistoryEntry = {

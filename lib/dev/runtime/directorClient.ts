@@ -30,14 +30,11 @@ export async function listAllDirectorStatuses(): Promise<DirectorRuntimeStatus[]
   return statuses
 }
 
-export async function patchDirectorStatus(project: string, patch: Partial<Omit<DirectorRuntimeStatus, 'project'>>): Promise<DirectorRuntimeStatus> {
-  const { status } = await fetchJson<{ status: DirectorRuntimeStatus }>('/api/dev/director/status', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ project, patch }),
-  })
-  return status
-}
+// PRA-P1-017: the raw patchDirectorStatus wrapper (POST /api/dev/director/status
+// with an arbitrary patch, including `state`) was removed — it bypassed every
+// lifecycle guard start/pause/resume/cancel enforce and had no caller in this
+// codebase. Every legitimate state transition already has its own guarded
+// route below (start/cancel/pause/resume/resolve/dismiss).
 
 export async function appendDirectorHistory(project: string, event: string, batchId: string | null, detail: string): Promise<void> {
   await fetchJson('/api/dev/director/history', {

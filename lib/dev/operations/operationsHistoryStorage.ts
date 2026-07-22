@@ -1,5 +1,4 @@
-import fs from 'node:fs'
-import path from 'node:path'
+import { readJsonStore, updateJsonStore } from '../director/fileJsonStore'
 import type { OperationsSnapshot } from './operationsTypes'
 
 /**
@@ -8,30 +7,23 @@ import type { OperationsSnapshot } from './operationsTypes'
  * so the Executive Operations Dashboard's trend fields (Engineering
  * Trend, Technical Debt Trend, Risk Trend) have real history to compare
  * against instead of a single point-in-time value.
+ *
+ * Wave 4 (Unlocked Stores) remediation — previously raw fs.readFileSync/
+ * writeFileSync with no lock and a non-atomic direct overwrite (a crash
+ * mid-write could truncate the file; two concurrent appends could lose
+ * one side's snapshot). Now routed through fileJsonStore.ts's shared
+ * locked primitive, the same fix already applied to every other store in
+ * this codebase — on-disk format (a flat OperationsSnapshot[] array,
+ * newest first, capped at MAX_HISTORY) is unchanged.
  */
-const STORE_DIR = path.join(process.cwd(), '.vyron-dev')
-const STORE_FILE = path.join(STORE_DIR, 'operations-history.json')
+const STORE_FILE = 'operations-history.json'
 const MAX_HISTORY = 200
 
-function ensureStore(): void {
-  if (!fs.existsSync(STORE_DIR)) fs.mkdirSync(STORE_DIR, { recursive: true })
-  if (!fs.existsSync(STORE_FILE)) fs.writeFileSync(STORE_FILE, '[]', 'utf-8')
-}
-
 export function readOperationsHistory(projectSlug?: string): OperationsSnapshot[] {
-  ensureStore()
-  let history: OperationsSnapshot[]
-  try {
-    history = JSON.parse(fs.readFileSync(STORE_FILE, 'utf-8')) as OperationsSnapshot[]
-  } catch {
-    return []
-  }
+  const history = readJsonStore<OperationsSnapshot[]>(STORE_FILE, [])
   return projectSlug ? history.filter(h => h.projectSlug === projectSlug) : history
 }
 
 export function appendOperationsSnapshot(snapshot: OperationsSnapshot): void {
-  ensureStore()
-  const history = readOperationsHistory()
-  history.unshift(snapshot)
-  fs.writeFileSync(STORE_FILE, JSON.stringify(history.slice(0, MAX_HISTORY), null, 2), 'utf-8')
+  updateJsonStore<OperationsSnapshot[]>(STORE_FILE, [], current => [snapshot, ...current].slice(0, MAX_HISTORY))
 }

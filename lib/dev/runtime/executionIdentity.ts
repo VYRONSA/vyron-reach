@@ -1,7 +1,6 @@
 import type { DevelopmentSession } from '../developmentOrchestrator'
 import type { GitIntelligence } from '../gitIntelligence'
 import type { BatchStatus } from '../batchesStorage'
-import type { RelevantKnowledge } from '../learning/learningTypes'
 
 export type CeoDecision = 'Approved' | 'Rejected' | 'Pending'
 
@@ -31,6 +30,19 @@ export type ExecutionIdentity = {
   runtimeJobId: string | null
   ceoDecision: CeoDecision
   knowledgeVersion: string
+  /**
+   * Version 2.0 Milestone 2.2 (Live Knowledge Refresh) — the Planning
+   * Service's own per-project counter (planningStateService.getMetadata)
+   * as of this batch's last synchronization boundary, the DNA-only
+   * fingerprint (lib/dev/knowledge/knowledgeVersion.ts's
+   * computeDNAVersion), and a compact digest of knowledgeVersion +
+   * planningVersion + dnaVersion together. All three are frozen at the
+   * same moment knowledgeVersion is and never recomputed for the
+   * lifetime of this batch — see serverExecutionLoop.ts's runLoopBody.
+   */
+  planningVersion: number
+  dnaVersion: string
+  executionContextVersion: string
   executionTimestamp: string
 }
 
@@ -41,6 +53,9 @@ export function buildExecutionIdentity(
     runtimeJobId?: string | null
     ceoDecision?: CeoDecision
     knowledgeVersion?: string
+    planningVersion?: number
+    dnaVersion?: string
+    executionContextVersion?: string
   } = {}
 ): ExecutionIdentity {
   const batch = session.currentBatch
@@ -59,6 +74,9 @@ export function buildExecutionIdentity(
     runtimeJobId: options.runtimeJobId ?? null,
     ceoDecision: options.ceoDecision ?? 'Pending',
     knowledgeVersion: options.knowledgeVersion ?? 'Unknown',
+    planningVersion: options.planningVersion ?? 0,
+    dnaVersion: options.dnaVersion ?? 'Unknown',
+    executionContextVersion: options.executionContextVersion ?? 'Unknown',
     executionTimestamp: new Date().toISOString(),
   }
 }
@@ -82,21 +100,10 @@ export function executionIdentityKey(identity: ExecutionIdentity): string {
     identity.batchVersion,
     identity.repositoryCommit ?? 'none',
     identity.knowledgeVersion,
+    // Version 2.0 Milestone 2.2: a Planning Service edit (e.g. a milestone
+    // or batch field changed directly, not via a Knowledge Service record)
+    // doesn't necessarily move knowledgeVersion, so planningVersion is
+    // included as its own independent recurrence-detection signal.
+    identity.planningVersion,
   ].join('::')
-}
-
-/**
- * A cheap, deterministic fingerprint of "what the Knowledge Engine
- * currently knows" for this task — changes whenever a DNA entry is
- * added/revised or new engineering memory is recorded, which is exactly
- * the Planning Rule's "Knowledge changed" allow-condition for Recurrence
- * Detection. Not a real version number (there isn't one persisted
- * anywhere) — a sorted digest of entry id+version/id pairs is sufficient
- * for equality comparison, which is all executionIdentityKey needs.
- */
-export function computeKnowledgeVersion(knowledge: RelevantKnowledge | null): string {
-  if (!knowledge) return 'Unknown'
-  const dna = knowledge.dnaEntries.map(d => `${d.id}@${d.version}`).sort().join(',')
-  const memory = knowledge.memoryEntries.map(m => m.id).sort().join(',')
-  return `dna:${dna}|mem:${memory}`
 }

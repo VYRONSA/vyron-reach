@@ -19,6 +19,15 @@ const NAV_ITEMS: { href: string; label: string; icon: ReactNode }[] = [
     ),
   },
   {
+    href: '/dev/initiation',
+    label: 'Project Initiation',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-[18px] w-[18px]">
+        <path d="M12 4v16M4 12h16" />
+      </svg>
+    ),
+  },
+  {
     href: '/dev/inbox',
     label: 'Engineering Inbox',
     icon: (

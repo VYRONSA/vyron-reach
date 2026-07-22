@@ -1,4 +1,4 @@
-import { readLocal, writeLocal } from './localStore'
+import { getPlanningCache, applyDecisionUpsert, applyDecisionRemoval, scheduleServerWrite, callApi, randomPlanningId, nowISO } from './planningState/planningClientCache'
 
 export type DecisionStatus = 'Proposed' | 'Approved' | 'Superseded' | 'Rejected'
 
@@ -18,23 +18,11 @@ export type Decision = {
   updatedAt: string
 }
 
-const KEY = 'vyron-dev-decisions-v1'
+export const DECISION_STATUS_OPTIONS: DecisionStatus[] = ['Proposed', 'Approved', 'Superseded', 'Rejected']
 
-const LINK_DEFAULTS = {
-  relatedMilestone: '',
-  relatedBatch: '',
-  relatedJournalEntry: '',
-  relatedPrompt: '',
-}
-
-type StoredDecision = Omit<Decision, keyof typeof LINK_DEFAULTS> & Partial<Pick<Decision, keyof typeof LINK_DEFAULTS>>
-
+/** Reads the browser's in-memory Planning cache — never localStorage. See lib/dev/planningState/planningClientCache.ts. */
 export function getDecisions(): Decision[] {
-  return readLocal<StoredDecision[]>(KEY, []).map(d => ({ ...LINK_DEFAULTS, ...d }))
-}
-
-function saveDecisions(decisions: Decision[]) {
-  writeLocal(KEY, decisions)
+  return getPlanningCache().decisions
 }
 
 export function createDecision(input: {
@@ -49,9 +37,9 @@ export function createDecision(input: {
   relatedJournalEntry?: string
   relatedPrompt?: string
 }): Decision {
-  const now = new Date().toISOString()
+  const now = nowISO()
   const record: Decision = {
-    id: `decision_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    id: randomPlanningId('decision'),
     decision: input.decision.trim(),
     reason: input.reason,
     alternatives: input.alternatives,
@@ -65,30 +53,52 @@ export function createDecision(input: {
     createdAt: now,
     updatedAt: now,
   }
-  const decisions = getDecisions()
-  decisions.unshift(record)
-  saveDecisions(decisions)
+  applyDecisionUpsert(record)
+  if (input.relatedProject) {
+    scheduleServerWrite(() =>
+      callApi(`/api/dev/planning/projects/${input.relatedProject}/decisions`, {
+        method: 'POST',
+        body: JSON.stringify({
+          decision: record.decision,
+          reason: record.reason,
+          alternatives: record.alternatives,
+          approvedDate: record.approvedDate,
+          status: record.status,
+          relatedMilestone: record.relatedMilestone,
+          relatedBatch: record.relatedBatch,
+          relatedJournalEntry: record.relatedJournalEntry,
+          relatedPrompt: record.relatedPrompt,
+        }),
+      })
+    )
+  }
   return record
 }
 
 export function updateDecision(id: string, patch: Partial<Omit<Decision, 'id' | 'createdAt'>>) {
-  const decisions = getDecisions().map(d => (d.id === id ? { ...d, ...patch, updatedAt: new Date().toISOString() } : d))
-  saveDecisions(decisions)
+  const current = getDecisions().find(d => d.id === id)
+  if (!current) return
+  const updated: Decision = { ...current, ...patch, updatedAt: nowISO() }
+  applyDecisionUpsert(updated)
+  if (current.relatedProject) {
+    scheduleServerWrite(() =>
+      callApi(`/api/dev/planning/projects/${current.relatedProject}/decisions/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
+    )
+  }
 }
 
 export function deleteDecision(id: string) {
-  saveDecisions(getDecisions().filter(d => d.id !== id))
+  const current = getDecisions().find(d => d.id === id)
+  applyDecisionRemoval(id)
+  if (!current?.relatedProject) return
+  scheduleServerWrite(() => callApi(`/api/dev/planning/projects/${current.relatedProject}/decisions/${id}`, { method: 'DELETE' }))
 }
 
 export function searchDecisions(query: string): Decision[] {
   const q = query.trim().toLowerCase()
   const decisions = getDecisions()
   if (!q) return decisions
-  return decisions.filter(d =>
-    [d.decision, d.reason, d.alternatives, d.status, d.relatedProject].some(field =>
-      field.toLowerCase().includes(q)
-    )
-  )
+  return decisions.filter(d => [d.decision, d.reason, d.alternatives, d.status, d.relatedProject].some(field => field.toLowerCase().includes(q)))
 }
 
 export function decisionsForProject(slug: string): Decision[] {
@@ -110,5 +120,3 @@ export function decisionsForJournalEntry(entryId: string): Decision[] {
 export function decisionsForPrompt(promptId: string): Decision[] {
   return getDecisions().filter(d => d.relatedPrompt === promptId)
 }
-
-export const DECISION_STATUS_OPTIONS: DecisionStatus[] = ['Proposed', 'Approved', 'Superseded', 'Rejected']

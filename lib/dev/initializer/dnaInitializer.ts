@@ -1,5 +1,4 @@
-import fs from 'node:fs'
-import path from 'node:path'
+import { readJsonStore, updateJsonStore } from '../director/fileJsonStore'
 import type { DNAProfileFields, InitializerStepResult } from './initializerTypes'
 
 /**
@@ -10,35 +9,22 @@ import type { DNAProfileFields, InitializerStepResult } from './initializerTypes
  * store answers "what has this product's engineering actually proven
  * true"; this one answers "what is this product," seeded once from
  * facts the Project record already knows (name, category) and left
- * blank everywhere else. Same server-only fs pattern as
- * runtimeStorage.ts and learningStorage.ts — a browser has no fs to
- * write to, so this file must only ever be imported by server code
- * (the Initializer API route), never by a 'use client' component.
+ * blank everywhere else. Server-only — a browser has no fs to write to,
+ * so this file must only ever be imported by server code (the
+ * Initializer API route), never by a 'use client' component.
+ *
+ * Wave 4 (Unlocked Stores) remediation — previously read-check-write
+ * against raw fs with no lock spanning the three steps: two concurrent
+ * initializeDNA calls for the same productSlug could both pass the
+ * "doesn't exist yet" check and both write, the second silently
+ * clobbering the first. Now the whole check-and-set runs inside
+ * fileJsonStore.ts's updateJsonStore, under one real file lock — on-disk
+ * format (a Record<productSlug, DNAProfileFields> object) is unchanged.
  */
-const STORE_DIR = path.join(process.cwd(), '.vyron-dev')
-const STORE_FILE = path.join(STORE_DIR, 'product-dna-profiles.json')
-
-function ensureFile(): void {
-  if (!fs.existsSync(STORE_DIR)) fs.mkdirSync(STORE_DIR, { recursive: true })
-  if (!fs.existsSync(STORE_FILE)) fs.writeFileSync(STORE_FILE, '{}', 'utf-8')
-}
-
-function readAll(): Record<string, DNAProfileFields> {
-  ensureFile()
-  try {
-    return JSON.parse(fs.readFileSync(STORE_FILE, 'utf-8')) as Record<string, DNAProfileFields>
-  } catch {
-    return {}
-  }
-}
-
-function writeAll(profiles: Record<string, DNAProfileFields>): void {
-  ensureFile()
-  fs.writeFileSync(STORE_FILE, JSON.stringify(profiles, null, 2), 'utf-8')
-}
+const STORE_FILE = 'product-dna-profiles.json'
 
 export function readProductDNAProfile(productSlug: string): DNAProfileFields | null {
-  return readAll()[productSlug] ?? null
+  return readJsonStore<Record<string, DNAProfileFields>>(STORE_FILE, {})[productSlug] ?? null
 }
 
 /**
@@ -52,25 +38,28 @@ export function readProductDNAProfile(productSlug: string): DNAProfileFields | n
  * evidence (lib/dev/learning/engineeringDNA.ts).
  */
 export function initializeDNA(productSlug: string, productName: string, category: string): InitializerStepResult {
-  const profiles = readAll()
-  if (profiles[productSlug]) {
-    return { step: 'Engineering DNA', created: [], skipped: [`DNA Version ${profiles[productSlug].dnaVersion} already exists`] }
-  }
+  let result: InitializerStepResult
+  updateJsonStore<Record<string, DNAProfileFields>>(STORE_FILE, {}, current => {
+    const existing = current[productSlug]
+    if (existing) {
+      result = { step: 'Engineering DNA', created: [], skipped: [`DNA Version ${existing.dnaVersion} already exists`] }
+      return current
+    }
 
-  const profile: DNAProfileFields = {
-    productSlug,
-    productName,
-    category,
-    technologyStack: '',
-    architectureStyle: '',
-    knownIntegrations: '',
-    businessDomain: '',
-    currentVersion: '',
-    dnaVersion: 1,
-    createdAt: new Date().toISOString(),
-  }
-  profiles[productSlug] = profile
-  writeAll(profiles)
-
-  return { step: 'Engineering DNA', created: ['DNA Version 1'], skipped: [] }
+    const profile: DNAProfileFields = {
+      productSlug,
+      productName,
+      category,
+      technologyStack: '',
+      architectureStyle: '',
+      knownIntegrations: '',
+      businessDomain: '',
+      currentVersion: '',
+      dnaVersion: 1,
+      createdAt: new Date().toISOString(),
+    }
+    result = { step: 'Engineering DNA', created: ['DNA Version 1'], skipped: [] }
+    return { ...current, [productSlug]: profile }
+  })
+  return result!
 }

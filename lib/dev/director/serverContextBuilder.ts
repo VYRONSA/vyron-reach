@@ -2,11 +2,21 @@ import { getGitIntelligence } from '../gitIntelligence'
 import { getBuildIntelligence } from '../buildIntelligence'
 import { listJobsForProject } from '../runtime/runtimeStorage'
 import { PROMPT_VALIDATION_REQUIREMENTS, PROMPT_EXPECTED_RETURN_FORMAT, type GeneratedPrompt, type PromptSection } from '../promptIntelligenceEngine'
+import { buildEngineeringIntelligenceContext, renderEngineeringIntelligenceSections } from './engineeringIntelligence/engineeringIntelligenceService'
+import type { KnowledgeSourceType } from '../knowledge/organisationalKnowledgeTypes'
 import type { DevelopmentContext } from '../runtime/runtimeContextBuilder'
 import type { DevelopmentJob } from '../runtime/runtimeTypes'
 import type { Batch } from '../batchesStorage'
 import type { Milestone } from '../milestonesStorage'
 import type { ExecutionSnapshot } from './executionSnapshotTypes'
+
+/** Categories the prompt already renders elsewhere via ExecutionSnapshot-derived sections (Architecture Decisions, Technical Debt, Open Risks, Existing Development Rules, below) — the Engineering Intelligence pipeline still retrieves and attributes these, it just isn't asked to render a second, duplicate prompt section for them. */
+const ALREADY_RENDERED_ELSEWHERE: KnowledgeSourceType[] = [
+  'Architecture Decision Record',
+  'Technical Debt',
+  'Risk Register',
+  'Development Rules',
+]
 
 /**
  * The headless equivalent of runtimeContextBuilder.ts's buildDevelopmentContext
@@ -35,6 +45,16 @@ export function buildServerDevelopmentContext(snapshot: ExecutionSnapshot, curre
   const build = getBuildIntelligence()
   const runtimeHistory = listJobsForProject(snapshot.project)
 
+  const engineeringIntelligence = buildEngineeringIntelligenceContext({
+    project: snapshot.project,
+    queryText: currentBatch.objective || `Batch ${currentBatch.batchNumber}`,
+    currentBatchId: currentBatch.id,
+    snapshotDecisions: snapshot.decisions,
+    snapshotTechnicalDebt: snapshot.technicalDebt,
+    snapshotOpenRisks: snapshot.openRisks,
+    snapshotDevelopmentRules: snapshot.developmentRules,
+  })
+
   return {
     product: snapshot.projectName,
     project: snapshot.project,
@@ -62,10 +82,24 @@ export function buildServerDevelopmentContext(snapshot: ExecutionSnapshot, curre
     buildStatus: build.lastBuildStatus,
     typescriptStatus: build.lastTypeScriptStatus,
     relevantKnowledge: null,
+    engineeringIntelligence,
   }
 }
 
-export function buildServerAutonomousPrompt(context: DevelopmentContext, currentBatch: Batch): GeneratedPrompt {
+/**
+ * Version 2.0 Phase 3 Milestone 3.1 — the Worker Role framing injected
+ * into a batch's prompt. Never a different model/provider (see
+ * workforce/workerRoles.ts's doc comment) — only which responsibilities
+ * and boundaries this one Claude Code run is asked to focus on for this
+ * one task.
+ */
+export type WorkerRolePromptFraming = {
+  role: string
+  responsibilities: string
+  boundaries: string
+}
+
+export function buildServerAutonomousPrompt(context: DevelopmentContext, currentBatch: Batch, workerRole?: WorkerRolePromptFraming): GeneratedPrompt {
   const sections: PromptSection[] = []
 
   sections.push({ heading: 'Product', content: context.product })
@@ -78,6 +112,13 @@ export function buildServerAutonomousPrompt(context: DevelopmentContext, current
     heading: 'Objective',
     content: currentBatch.objective || `Continue implementing Batch ${currentBatch.batchNumber}.`,
   })
+
+  if (workerRole) {
+    sections.push({
+      heading: 'Assigned Worker Role',
+      content: `You are acting as the ${workerRole.role} for this task.\nResponsibilities: ${workerRole.responsibilities}\nBoundaries: ${workerRole.boundaries}`,
+    })
+  }
 
   if (context.architectureDecisions.length > 0) {
     sections.push({ heading: 'Architecture Decisions', content: context.architectureDecisions.map(d => `- ${d.decision} — ${d.reason}`).join('\n') })
@@ -103,6 +144,17 @@ export function buildServerAutonomousPrompt(context: DevelopmentContext, current
   if (context.developmentRules) sections.push({ heading: 'Existing Development Rules', content: context.developmentRules })
   if (context.buildStatus !== 'Unknown') sections.push({ heading: 'Build Status', content: context.buildStatus })
   if (context.typescriptStatus !== 'Unknown') sections.push({ heading: 'TypeScript Status', content: context.typescriptStatus })
+
+  // ---- Engineering Intelligence (organisational knowledge) ----
+  // Everything the Engineering Intelligence pipeline retrieved for this
+  // batch beyond what's already shown above (Architecture Decisions/
+  // Technical Debt/Open Risks/Existing Development Rules) — Product
+  // Knowledge, prior batches/outcomes, Lessons Learned, Shared Framework
+  // Knowledge, Review Board Decisions, Historical Fixes — plus an honest
+  // record of every source that had nothing relevant to offer.
+  if (context.engineeringIntelligence) {
+    sections.push(...renderEngineeringIntelligenceSections(context.engineeringIntelligence, ALREADY_RENDERED_ELSEWHERE))
+  }
 
   sections.push({ heading: 'Validation Requirements', content: PROMPT_VALIDATION_REQUIREMENTS.map(v => `- ${v}`).join('\n') })
   sections.push({ heading: 'Expected Claude Return Format', content: PROMPT_EXPECTED_RETURN_FORMAT.map(v => `- ${v}`).join('\n') })

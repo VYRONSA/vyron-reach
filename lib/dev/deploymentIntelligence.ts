@@ -40,10 +40,17 @@ export type DeploymentIntelligenceContext = {
  * link`) or carries an explicit vercel.json. Filesystem + env var reads
  * only — no network calls, no Vercel CLI, no shelling out.
  */
-function isDeploymentConfigured(): boolean {
+/**
+ * Parameterized (root defaults to process.cwd()) so callers that need to
+ * check a different directory — e.g. lib/dev/director/releaseManagement/'s
+ * applicability check running against an isolated test fixture rather
+ * than the real repo — can do so without this module ever reading
+ * process.cwd() implicitly on their behalf. The default preserves this
+ * function's original behavior for its existing caller below.
+ */
+export function isDeploymentConfigured(root: string = /*turbopackIgnore: true*/ process.cwd()): boolean {
   if (process.env.VERCEL_ENV) return true
   try {
-    const root = /*turbopackIgnore: true*/ process.cwd()
     if (fs.existsSync(path.join(root, '.vercel', 'project.json'))) return true
     if (fs.existsSync(path.join(root, 'vercel.json'))) return true
   } catch {

@@ -14,6 +14,17 @@ import type { ProductBible } from '../productBibleStorage'
  * client stores (type-only imports — zero runtime coupling to
  * localStorage) so a snapshot round-trips losslessly when the browser
  * later pulls it back to reconcile its own view.
+ *
+ * As of Version 2.0 Milestone 2.1, this is a LIGHTWEIGHT RUNTIME CACHE
+ * ONLY — it is no longer the system of record for engineering history.
+ * `decisions`/`technicalDebt`/`openRisks` remain here purely as the
+ * frozen-at-hand-off inputs the active run's own preflight-blocker checks
+ * read (see serverExecutionLoop.ts's findPreflightBlocker); the permanent,
+ * queryable historical record for every decision/debt/risk/completion now
+ * lives exclusively in the Knowledge Service (lib/dev/knowledge/). Losing
+ * this entire snapshot (a crash before it's ever re-saved, a manual
+ * delete) loses no engineering knowledge — only this one run's in-flight
+ * progress cache, which recovery already handles separately.
  */
 export type ExecutionSnapshot = {
   project: string
@@ -22,16 +33,22 @@ export type ExecutionSnapshot = {
   projectDescription: string
   milestones: Milestone[]
   batches: Batch[]
-  /** Architecture Decisions as of hand-off time — frozen for the run's duration; see "Remaining Limitations" on why this isn't kept live. */
+  /** Architecture Decisions as of hand-off time — frozen for the run's duration; used only for this run's own context-building, not as a historical record (see the Knowledge Service for that). */
   decisions: { decision: string; reason: string }[]
   /** Only Critical-relevant fields are carried — batch/milestone ids for blocker attribution, title/priority for display. */
   technicalDebt: { title: string; priority: string; relatedBatch: string }[]
   openRisks: { title: string; severity: string; relatedMilestone: string }[]
   developmentRules: string
   productBible: ProductBible
-  /** A cheap fingerprint of what the snapshot's decisions/debt/risks looked like at hand-off — the "Knowledge Version" persisted alongside execution identity. */
-  knowledgeVersion: string
-  /** Minimal, server-appended completion records — this run's own audit trail of "what got built," independent of the (localStorage-only) Handover store. */
+  /**
+   * Minimal, server-appended completion records — a lightweight runtime
+   * cache used only by estimateCompletion() (this run's own ETA math via
+   * each completion's recorded job duration). NOT the historical record:
+   * every batch completion is durably recorded via the Knowledge Service's
+   * recordBatchCompletion() at the same time this array is appended to,
+   * and that Knowledge Service record — never this array — is what
+   * survives independently of this snapshot.
+   */
   completions: SnapshotCompletion[]
   handedOffAt: string
 }
@@ -48,4 +65,4 @@ export type SnapshotCompletion = {
 }
 
 /** Exactly what the browser sends once, at Start Development — everything buildServerDevelopmentContext/serverPlanningState need to run without it again. */
-export type HandoffInput = Omit<ExecutionSnapshot, 'knowledgeVersion' | 'completions' | 'handedOffAt'>
+export type HandoffInput = Omit<ExecutionSnapshot, 'completions' | 'handedOffAt'>

@@ -1,4 +1,4 @@
-import { readLocal, writeLocal } from './localStore'
+import { getPlanningCache, applyRoadmapListsUpsert, scheduleServerWrite, callApi, randomPlanningId, nowISO } from './planningState/planningClientCache'
 
 export type ProjectListKind = 'roadmap' | 'upcoming'
 
@@ -29,16 +29,9 @@ export const PROJECT_LIST_CONFIG: Record<
   },
 }
 
-function keyFor(projectSlug: string, kind: ProjectListKind) {
-  return `vyron-dev-project-${kind}-${projectSlug}-v1`
-}
-
+/** Reads the browser's in-memory Planning cache — never localStorage. See lib/dev/planningState/planningClientCache.ts. */
 export function getProjectList(projectSlug: string, kind: ProjectListKind): ProjectListItem[] {
-  return readLocal<ProjectListItem[]>(keyFor(projectSlug, kind), [])
-}
-
-function saveProjectList(projectSlug: string, kind: ProjectListKind, items: ProjectListItem[]) {
-  writeLocal(keyFor(projectSlug, kind), items)
+  return getPlanningCache().roadmapLists[projectSlug]?.[kind] ?? []
 }
 
 export function addProjectListItem(
@@ -46,18 +39,22 @@ export function addProjectListItem(
   kind: ProjectListKind,
   input: { title: string; detail: string; status: string }
 ): ProjectListItem {
-  const now = new Date().toISOString()
+  const now = nowISO()
   const item: ProjectListItem = {
-    id: `${kind}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    id: randomPlanningId(kind),
     title: input.title.trim(),
     detail: input.detail.trim(),
     status: input.status,
     createdAt: now,
     updatedAt: now,
   }
-  const items = getProjectList(projectSlug, kind)
-  items.unshift(item)
-  saveProjectList(projectSlug, kind, items)
+  applyRoadmapListsUpsert(projectSlug, kind, [item, ...getProjectList(projectSlug, kind)])
+  scheduleServerWrite(() =>
+    callApi(`/api/dev/planning/projects/${projectSlug}/roadmap`, {
+      method: 'POST',
+      body: JSON.stringify({ kind, title: item.title, detail: item.detail, status: item.status }),
+    })
+  )
   return item
 }
 
@@ -67,16 +64,18 @@ export function updateProjectListItem(
   id: string,
   patch: Partial<Pick<ProjectListItem, 'title' | 'detail' | 'status'>>
 ) {
-  const items = getProjectList(projectSlug, kind).map(item =>
-    item.id === id ? { ...item, ...patch, updatedAt: new Date().toISOString() } : item
+  const items = getProjectList(projectSlug, kind).map(item => (item.id === id ? { ...item, ...patch, updatedAt: nowISO() } : item))
+  applyRoadmapListsUpsert(projectSlug, kind, items)
+  scheduleServerWrite(() =>
+    callApi(`/api/dev/planning/projects/${projectSlug}/roadmap/${id}`, { method: 'PATCH', body: JSON.stringify({ kind, ...patch }) })
   )
-  saveProjectList(projectSlug, kind, items)
 }
 
 export function deleteProjectListItem(projectSlug: string, kind: ProjectListKind, id: string) {
-  saveProjectList(
+  applyRoadmapListsUpsert(
     projectSlug,
     kind,
     getProjectList(projectSlug, kind).filter(item => item.id !== id)
   )
+  scheduleServerWrite(() => callApi(`/api/dev/planning/projects/${projectSlug}/roadmap/${id}?kind=${kind}`, { method: 'DELETE' }))
 }

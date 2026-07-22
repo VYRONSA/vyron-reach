@@ -22,11 +22,13 @@ import { PRIORITY_LABEL } from '@/lib/dev/queueStorage'
 import type { GitIntelligence } from '@/lib/dev/gitIntelligence'
 import type { DeploymentIntelligence } from '@/lib/dev/deploymentIntelligence'
 import type { BuildIntelligence } from '@/lib/dev/buildIntelligence'
+import { buildExecutiveBuildFailureReport } from '@/lib/dev/executiveBuildFailureTranslator'
 import { DevBadge, DevCard, DevCardHeader, DevField, DevSectionLabel, DevSkeleton, devReadinessTone, devValidationTone } from './ui'
 import { MissionControl } from './MissionControl'
 import { ExecutiveActionQueuePanel } from './ExecutiveActionQueuePanel'
 import { EngineeringAssessmentPanel } from './EngineeringAssessmentPanel'
 import { PlanningCentrePanel } from './PlanningCentrePanel'
+import { ExecutiveBuildFailureReportModal } from './ExecutiveBuildFailureReportModal'
 
 /**
  * The Executive Command Centre — VYRON DEV's primary operational screen.
@@ -59,6 +61,7 @@ export function ExecutiveCommandCentre({
   const [latestHandover, setLatestHandover] = useState<Handover | null>(null)
   const [engineeringReady, setEngineeringReady] = useState(false)
   const [refreshToken, setRefreshToken] = useState(0)
+  const [showBuildFailureReport, setShowBuildFailureReport] = useState(false)
 
   useEffect(() => {
     const context = { buildStatus, typescriptStatus, git, deployment, build }
@@ -87,6 +90,7 @@ export function ExecutiveCommandCentre({
 
   const significantChanges = getSignificantChanges(events)
   const alerts = getExecutiveAlerts(events)
+  const buildFailureReport = build && git ? buildExecutiveBuildFailureReport(build, git) : null
   const memory = getDevelopmentConversationMemory(slug, session, plan, dependencies, events)
   const generatedPrompt = getGeneratedPrompt(slug, session, dependencies, events, memory)
   const actionQueue = getExecutiveActions(session, plan, dependencies, events, memory)
@@ -104,6 +108,7 @@ export function ExecutiveCommandCentre({
         git={git}
         deployment={deployment}
         onApplied={() => setRefreshToken(t => t + 1)}
+        onOpenBuildFailureReport={buildFailureReport ? () => setShowBuildFailureReport(true) : undefined}
       />
 
       <div className="mt-4">
@@ -283,7 +288,18 @@ export function ExecutiveCommandCentre({
       </div>
 
       <div className="mt-4 border-t border-[var(--dev-border)] pt-4">
-        <DevSectionLabel>Build</DevSectionLabel>
+        <div className="flex items-center justify-between gap-3">
+          <DevSectionLabel>Build</DevSectionLabel>
+          {buildFailureReport ? (
+            <button
+              type="button"
+              onClick={() => setShowBuildFailureReport(true)}
+              className="rounded-md border border-rose-500/30 px-2 py-1 text-[11px] font-medium text-rose-500 transition-colors hover:bg-rose-500/10 dark:text-rose-400"
+            >
+              View Build Report
+            </button>
+          ) : null}
+        </div>
         <div className="mt-2 grid grid-cols-2 gap-4 sm:grid-cols-3">
           <DevField label="Build Status">
             <DevBadge tone={devValidationTone(session.buildStatus)}>{session.buildStatus}</DevBadge>
@@ -296,6 +312,10 @@ export function ExecutiveCommandCentre({
           </DevField>
         </div>
       </div>
+
+      {showBuildFailureReport && buildFailureReport ? (
+        <ExecutiveBuildFailureReportModal report={buildFailureReport} onClose={() => setShowBuildFailureReport(false)} />
+      ) : null}
 
       <div className="mt-4 border-t border-[var(--dev-border)] pt-4">
         <DevSectionLabel>Deployment</DevSectionLabel>
@@ -490,7 +510,10 @@ export function ExecutiveCommandCentre({
         </div>
       </div>
 
-      <ExecutiveActionQueuePanel actions={actionQueue.actions} />
+      <ExecutiveActionQueuePanel
+        actions={actionQueue.actions}
+        onOpenBuildFailureReport={buildFailureReport ? () => setShowBuildFailureReport(true) : undefined}
+      />
       </DevCard>
       </div>
 

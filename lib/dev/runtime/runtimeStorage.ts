@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { atomicWriteFileSync, withFileLock } from '../fileLock'
+import { getVyronDevDataDir } from '../vyronDevDataDir'
 import { canTransition } from './executionStateMachine'
 import type { DevelopmentJob } from './runtimeTypes'
 
@@ -30,18 +31,24 @@ import type { DevelopmentJob } from './runtimeTypes'
  * let orphan-detection reconciliation downgrade an already-Completed job
  * back to Failed using a stale Running/Validating read.
  */
-const STORE_DIR = path.join(process.cwd(), '.vyron-dev')
-const STORE_FILE = path.join(STORE_DIR, 'runtime-jobs.json')
+function storeDir(): string {
+  return getVyronDevDataDir()
+}
+function storeFile(): string {
+  return path.join(storeDir(), 'runtime-jobs.json')
+}
 
 function ensureStore(): void {
-  if (!fs.existsSync(STORE_DIR)) fs.mkdirSync(STORE_DIR, { recursive: true })
-  if (!fs.existsSync(STORE_FILE)) fs.writeFileSync(STORE_FILE, '[]', 'utf-8')
+  const dir = storeDir()
+  const file = storeFile()
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  if (!fs.existsSync(file)) fs.writeFileSync(file, '[]', 'utf-8')
 }
 
 export function readJobs(): DevelopmentJob[] {
   ensureStore()
   try {
-    const raw = fs.readFileSync(STORE_FILE, 'utf-8')
+    const raw = fs.readFileSync(storeFile(), 'utf-8')
     return JSON.parse(raw) as DevelopmentJob[]
   } catch {
     return []
@@ -50,7 +57,7 @@ export function readJobs(): DevelopmentJob[] {
 
 function writeJobs(jobs: DevelopmentJob[]): void {
   ensureStore()
-  atomicWriteFileSync(STORE_FILE, JSON.stringify(jobs, null, 2))
+  atomicWriteFileSync(storeFile(), JSON.stringify(jobs, null, 2))
 }
 
 export function getJob(id: string): DevelopmentJob | null {
@@ -58,7 +65,7 @@ export function getJob(id: string): DevelopmentJob | null {
 }
 
 export function saveJob(job: DevelopmentJob): void {
-  withFileLock(STORE_FILE, () => {
+  withFileLock(storeFile(), () => {
     const jobs = readJobs()
     jobs.unshift(job)
     writeJobs(jobs)
@@ -66,7 +73,7 @@ export function saveJob(job: DevelopmentJob): void {
 }
 
 export function updateJob(id: string, patch: Partial<DevelopmentJob>): DevelopmentJob | null {
-  return withFileLock(STORE_FILE, () => {
+  return withFileLock(storeFile(), () => {
     const jobs = readJobs()
     const idx = jobs.findIndex(j => j.id === id)
     if (idx === -1) return null

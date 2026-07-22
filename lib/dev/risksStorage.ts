@@ -1,4 +1,4 @@
-import { readLocal, writeLocal } from './localStore'
+import { getPlanningCache, applyRiskUpsert, applyRiskRemoval, scheduleServerWrite, callApi, randomPlanningId, nowISO } from './planningState/planningClientCache'
 
 export type RiskLevel = 'Low' | 'Medium' | 'High'
 export type RiskStatus = 'Open' | 'Monitoring' | 'Mitigated' | 'Closed'
@@ -18,19 +18,12 @@ export type Risk = {
   updatedAt: string
 }
 
-const KEY = 'vyron-dev-risks-v1'
-
 export const RISK_LEVEL_OPTIONS: RiskLevel[] = ['Low', 'Medium', 'High']
 export const RISK_STATUS_OPTIONS: RiskStatus[] = ['Open', 'Monitoring', 'Mitigated', 'Closed']
 
-type StoredRisk = Omit<Risk, 'relatedMilestone'> & { relatedMilestone?: string }
-
+/** Reads the browser's in-memory Planning cache — never localStorage. See lib/dev/planningState/planningClientCache.ts. */
 export function getRisks(): Risk[] {
-  return readLocal<StoredRisk[]>(KEY, []).map(r => ({ relatedMilestone: '', ...r }))
-}
-
-function saveRisks(items: Risk[]) {
-  writeLocal(KEY, items)
+  return getPlanningCache().risks
 }
 
 export function createRisk(input: {
@@ -44,37 +37,58 @@ export function createRisk(input: {
   owner: string
   status: RiskStatus
 }): Risk {
-  const now = new Date().toISOString()
+  const now = nowISO()
   const record: Risk = {
-    id: `risk_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    id: randomPlanningId('risk'),
     ...input,
     relatedMilestone: input.relatedMilestone ?? '',
     title: input.title.trim(),
     createdAt: now,
     updatedAt: now,
   }
-  const items = getRisks()
-  items.unshift(record)
-  saveRisks(items)
+  applyRiskUpsert(record)
+  if (input.project) {
+    scheduleServerWrite(() =>
+      callApi(`/api/dev/planning/projects/${input.project}/risks`, {
+        method: 'POST',
+        body: JSON.stringify({
+          title: record.title,
+          description: record.description,
+          relatedMilestone: record.relatedMilestone,
+          severity: record.severity,
+          probability: record.probability,
+          mitigation: record.mitigation,
+          owner: record.owner,
+          status: record.status,
+        }),
+      })
+    )
+  }
   return record
 }
 
 export function updateRisk(id: string, patch: Partial<Omit<Risk, 'id' | 'createdAt'>>) {
-  const items = getRisks().map(r => (r.id === id ? { ...r, ...patch, updatedAt: new Date().toISOString() } : r))
-  saveRisks(items)
+  const current = getRisks().find(r => r.id === id)
+  if (!current) return
+  const updated: Risk = { ...current, ...patch, updatedAt: nowISO() }
+  applyRiskUpsert(updated)
+  if (current.project) {
+    scheduleServerWrite(() => callApi(`/api/dev/planning/projects/${current.project}/risks/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }))
+  }
 }
 
 export function deleteRisk(id: string) {
-  saveRisks(getRisks().filter(r => r.id !== id))
+  const current = getRisks().find(r => r.id === id)
+  applyRiskRemoval(id)
+  if (!current?.project) return
+  scheduleServerWrite(() => callApi(`/api/dev/planning/projects/${current.project}/risks/${id}`, { method: 'DELETE' }))
 }
 
 export function searchRisks(query: string): Risk[] {
   const q = query.trim().toLowerCase()
   const items = getRisks()
   if (!q) return items
-  return items.filter(r =>
-    [r.title, r.description, r.mitigation, r.owner, r.severity, r.status].some(f => f.toLowerCase().includes(q))
-  )
+  return items.filter(r => [r.title, r.description, r.mitigation, r.owner, r.severity, r.status].some(f => f.toLowerCase().includes(q)))
 }
 
 export function risksForProject(slug: string): Risk[] {
